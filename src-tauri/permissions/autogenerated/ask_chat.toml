@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ask-chat"
+description = "Enables the ask_chat command without any pre-configured scope."
+commands.allow = ["ask_chat"]
+
+[[permission]]
+identifier = "deny-ask-chat"
+description = "Denies the ask_chat command without any pre-configured scope."
+commands.deny = ["ask_chat"]

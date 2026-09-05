@@ -10,8 +10,8 @@ An earlier macOS proof of concept (Tauri 2, on-device Whisper, system-audio capt
 
 ```bash
 npm install
-pip install -r requirements.txt   # needed once transcription lands
+pip install -r requirements.txt
 npm run tauri:dev
 ```
 
-Requires Node 20+, Rust (via rustup), and Xcode Command Line Tools.
+Requires Node 20+, Rust (via rustup), Xcode Command Line Tools, and `faster-whisper` on `python3`. Add your OpenAI API token in Settings to use scoped chat.

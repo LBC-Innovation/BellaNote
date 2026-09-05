@@ -70,3 +70,47 @@ export function deleteArtifact(id: string) {
 export function getArtifactAudioPath(id: string) {
   return invoke<string | null>("get_artifact_audio_path", { args: { id } });
 }
+
+export type ChatTurn = { role: string; content: string };
+export type ScopeFile = {
+  id: string;
+  title: string;
+  meetingGroupId: string;
+  included: boolean;
+};
+export type ScopePreview = {
+  readyCount: number;
+  totalCount: number;
+  usedCount: number;
+  omittedCount: number;
+  files: ScopeFile[];
+};
+export type ChatScopeType = "organization" | "topic" | "meeting_group" | "artifact";
+
+export function setOpenAiKey(apiKey: string) {
+  return invoke<void>("set_openai_api_key", { args: { apiKey } });
+}
+
+export function clearOpenAiKey() {
+  return invoke<void>("clear_openai_api_key");
+}
+
+export function openAiKeyConfigured() {
+  return invoke<boolean>("openai_api_key_configured");
+}
+
+export function chatScopePreview(scopeType: ChatScopeType, scopeId: string) {
+  return invoke<ScopePreview>("chat_scope_preview", { args: { scopeType, scopeId } });
+}
+
+export function getChatThread(scopeType: ChatScopeType, scopeId: string) {
+  return invoke<{ messages: ChatTurn[] }>("get_chat_thread", { args: { scopeType, scopeId } });
+}
+
+export function newChatThread(scopeType: ChatScopeType, scopeId: string) {
+  return invoke<{ messages: ChatTurn[] }>("new_chat_thread", { args: { scopeType, scopeId } });
+}
+
+export function askChat(scopeType: ChatScopeType, scopeId: string, question: string) {
+  return invoke<{ messages: ChatTurn[] }>("ask_chat", { args: { scopeType, scopeId, question } });
+}

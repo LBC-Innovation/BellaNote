@@ -18,6 +18,13 @@ fn main() {
             "rename_artifact",
             "delete_artifact",
             "get_artifact_audio_path",
+            "set_openai_api_key",
+            "clear_openai_api_key",
+            "openai_api_key_configured",
+            "chat_scope_preview",
+            "get_chat_thread",
+            "new_chat_thread",
+            "ask_chat",
         ]),
     ))
     .expect("tauri build failed");

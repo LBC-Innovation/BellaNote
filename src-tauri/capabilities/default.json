@@ -24,6 +24,13 @@
     "allow-import-transcript",
     "allow-rename-artifact",
     "allow-delete-artifact",
-    "allow-get-artifact-audio-path"
+    "allow-get-artifact-audio-path",
+    "allow-set-openai-api-key",
+    "allow-clear-openai-api-key",
+    "allow-openai-api-key-configured",
+    "allow-chat-scope-preview",
+    "allow-get-chat-thread",
+    "allow-new-chat-thread",
+    "allow-ask-chat"
   ]
 }

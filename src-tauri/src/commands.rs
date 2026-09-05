@@ -1,6 +1,8 @@
 use crate::artifacts;
+use crate::chat::{self, ChatThreadView, ScopePreview};
 use crate::db::{Artifact, LibraryOrganization, MeetingGroup, Organization, Topic};
 use crate::error::AppResult;
+use crate::llm;
 use crate::state::AppState;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -161,4 +163,66 @@ pub fn delete_artifact(app: AppHandle, state: State<'_, Arc<AppState>>, args: Id
 #[tauri::command]
 pub fn get_artifact_audio_path(app: AppHandle, args: IdArgs) -> AppResult<Option<String>> {
     Ok(artifacts::find_audio_path(&app, &args.id).map(|p| p.to_string_lossy().into_owned()))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiKeyArgs {
+    pub api_key: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatAskArgs {
+    pub scope_type: String,
+    pub scope_id: String,
+    pub question: String,
+}
+
+#[tauri::command]
+pub fn set_openai_api_key(args: ApiKeyArgs) -> AppResult<()> {
+    llm::set_api_key(&args.api_key)
+}
+
+#[tauri::command]
+pub fn clear_openai_api_key() -> AppResult<()> {
+    llm::clear_api_key()
+}
+
+#[tauri::command]
+pub fn openai_api_key_configured() -> bool {
+    llm::api_key_configured()
+}
+
+#[tauri::command]
+pub fn chat_scope_preview(
+    state: State<'_, Arc<AppState>>,
+    args: chat::ScopeArgs,
+) -> AppResult<ScopePreview> {
+    chat::preview(&state, &args.scope_type, &args.scope_id)
+}
+
+#[tauri::command]
+pub fn get_chat_thread(
+    state: State<'_, Arc<AppState>>,
+    args: chat::ScopeArgs,
+) -> AppResult<ChatThreadView> {
+    chat::get_thread(&state, &args.scope_type, &args.scope_id)
+}
+
+#[tauri::command]
+pub fn new_chat_thread(
+    state: State<'_, Arc<AppState>>,
+    args: chat::ScopeArgs,
+) -> AppResult<ChatThreadView> {
+    chat::new_thread(&state, &args.scope_type, &args.scope_id)
+}
+
+#[tauri::command]
+pub async fn ask_chat(
+    state: State<'_, Arc<AppState>>,
+    args: ChatAskArgs,
+) -> AppResult<ChatThreadView> {
+    let state = state.inner().clone();
+    chat::ask(&state, &args.scope_type, &args.scope_id, &args.question).await
 }

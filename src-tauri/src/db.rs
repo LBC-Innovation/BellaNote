@@ -1,4 +1,5 @@
 use crate::error::{AppError, AppResult};
+use crate::llm::ChatTurn;
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
@@ -600,6 +601,42 @@ impl Db {
         let conn = self.lock()?;
         let total: i64 = conn.query_row(total_sql, params![scope_id], |row| row.get(0))?;
         Ok((ready, total))
+    }
+
+    pub fn get_chat_messages(&self, scope_type: &str, scope_id: &str) -> AppResult<Vec<ChatTurn>> {
+        let conn = self.lock()?;
+        let raw: Option<String> = conn
+            .query_row(
+                "SELECT messages_json FROM chat_threads WHERE scope_type = ?1 AND scope_id = ?2",
+                params![scope_type, scope_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        match raw {
+            Some(json) => Ok(serde_json::from_str(&json).unwrap_or_default()),
+            None => Ok(vec![]),
+        }
+    }
+
+    pub fn set_chat_messages(
+        &self,
+        scope_type: &str,
+        scope_id: &str,
+        messages: &[ChatTurn],
+    ) -> AppResult<()> {
+        let json = serde_json::to_string(messages)
+            .map_err(|e| AppError::Message(e.to_string()))?;
+        let now = now_rfc3339();
+        let conn = self.lock()?;
+        conn.execute(
+            "INSERT INTO chat_threads (id, scope_type, scope_id, messages_json, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(scope_type, scope_id) DO UPDATE SET
+                messages_json = excluded.messages_json,
+                updated_at = excluded.updated_at",
+            params![new_id(), scope_type, scope_id, json, now],
+        )?;
+        Ok(())
     }
 }
 

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-openai-api-key-configured"
+description = "Enables the openai_api_key_configured command without any pre-configured scope."
+commands.allow = ["openai_api_key_configured"]
+
+[[permission]]
+identifier = "deny-openai-api-key-configured"
+description = "Denies the openai_api_key_configured command without any pre-configured scope."
+commands.deny = ["openai_api_key_configured"]

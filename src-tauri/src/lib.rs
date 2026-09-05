@@ -1,8 +1,10 @@
 mod artifacts;
+mod chat;
 mod commands;
 mod db;
 mod error;
 mod import_transcript;
+mod llm;
 mod paths;
 mod state;
 mod transcribe;
@@ -48,6 +50,13 @@ pub fn run() {
             commands::rename_artifact,
             commands::delete_artifact,
             commands::get_artifact_audio_path,
+            commands::set_openai_api_key,
+            commands::clear_openai_api_key,
+            commands::openai_api_key_configured,
+            commands::chat_scope_preview,
+            commands::get_chat_thread,
+            commands::new_chat_thread,
+            commands::ask_chat,
         ])
         .run(tauri::generate_context!())
         .expect("error while running BellaNote");
