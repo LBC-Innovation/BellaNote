@@ -71,7 +71,7 @@ export function getArtifactAudioPath(id: string) {
   return invoke<string | null>("get_artifact_audio_path", { args: { id } });
 }
 
-export type ChatTurn = { role: string; content: string };
+export type ChatTurn = { role: string; content: string; createdAt?: string };
 export type ScopeFile = {
   id: string;
   title: string;

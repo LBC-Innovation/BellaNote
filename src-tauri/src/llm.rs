@@ -41,9 +41,22 @@ pub fn get_api_key() -> Option<String> {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct ChatTurn {
     pub role: String,
     pub content: String,
+    #[serde(default)]
+    pub created_at: String,
+}
+
+impl ChatTurn {
+    pub fn new(role: impl Into<String>, content: impl Into<String>) -> Self {
+        Self {
+            role: role.into(),
+            content: content.into(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
 }
 
 #[derive(serde::Deserialize)]

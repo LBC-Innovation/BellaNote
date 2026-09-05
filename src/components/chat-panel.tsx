@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { MessageCircle, Send } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, MessageCircle, Send } from "lucide-react";
 import { toast } from "sonner";
+import { ChatMarkdown } from "@/components/chat-markdown";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,6 +26,47 @@ function defaultScope(
   return null;
 }
 
+function formatChatTime(value?: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const now = new Date();
+  const sameDay = date.toDateString() === now.toDateString();
+  const time = date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (sameDay) return time;
+  return `${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}, ${time}`;
+}
+
+function MessageMeta({ name, at }: { name: string; at?: string }) {
+  const stamp = formatChatTime(at);
+  return (
+    <p className="mb-1 flex items-baseline gap-2">
+      <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{name}</span>
+      {stamp ? (
+        <time dateTime={at} className="text-[10px] tabular-nums text-muted-foreground/80">
+          {stamp}
+        </time>
+      ) : null}
+    </p>
+  );
+}
+
+function ThinkingBubble({ at }: { at: string }) {
+  return (
+    <div className="thinking-bubble rounded-2xl bg-black/20 px-3 py-2">
+      <MessageMeta name="BellaNote" at={at} />
+      <div className="flex items-center gap-2 py-1" aria-live="polite" aria-label="BellaNote is thinking">
+        <span className="flex items-center gap-1">
+          <span className="chat-dot size-1.5 rounded-full bg-primary" />
+          <span className="chat-dot size-1.5 rounded-full bg-primary" style={{ animationDelay: "0.16s" }} />
+          <span className="chat-dot size-1.5 rounded-full bg-primary" style={{ animationDelay: "0.32s" }} />
+        </span>
+        <span className="text-xs text-muted-foreground">Thinking…</span>
+      </div>
+    </div>
+  );
+}
+
 export function ChatPanel({ keyConfigured, onNeedKey }: { keyConfigured: boolean; onNeedKey: () => void }) {
   const orgs = useLibraryStore((s) => s.orgs);
   const selection = useLibraryStore((s) => s.selection);
@@ -36,6 +78,8 @@ export function ChatPanel({ keyConfigured, onNeedKey }: { keyConfigured: boolean
   const [preview, setPreview] = useState<ScopePreview | null>(null);
   const [messages, setMessages] = useState<ChatTurn[]>([]);
   const [busy, setBusy] = useState(false);
+  const [thinkingAt, setThinkingAt] = useState<string | null>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const scopeId = useMemo(() => {
     if (scopeType === "organization") return org?.id ?? null;
@@ -53,14 +97,20 @@ export function ChatPanel({ keyConfigured, onNeedKey }: { keyConfigured: boolean
     if (!scopeId) {
       setPreview(null);
       setMessages([]);
+      setBusy(false);
+      setThinkingAt(null);
       return;
     }
     void api.chatScopePreview(scopeType, scopeId).then(setPreview).catch(() => setPreview(null));
     void api.getChatThread(scopeType, scopeId).then((thread) => setMessages(thread.messages));
   }, [scopeType, scopeId]);
 
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+  }, [messages, busy]);
+
   async function send() {
-    if (!scopeId || !question.trim()) return;
+    if (!scopeId || !question.trim() || busy) return;
     if (!keyConfigured) {
       onNeedKey();
       return;
@@ -69,15 +119,26 @@ export function ChatPanel({ keyConfigured, onNeedKey }: { keyConfigured: boolean
       toast.error("There is no ready transcript in this scope yet.");
       return;
     }
+    const text = question.trim();
+    const optimistic: ChatTurn = {
+      role: "user",
+      content: text,
+      createdAt: new Date().toISOString(),
+    };
+    setQuestion("");
+    setMessages((current) => [...current, optimistic]);
+    setThinkingAt(new Date().toISOString());
     setBusy(true);
     try {
-      const thread = await api.askChat(scopeType, scopeId, question.trim());
+      const thread = await api.askChat(scopeType, scopeId, text);
       setMessages(thread.messages);
-      setQuestion("");
     } catch (err) {
+      setMessages((current) => current.filter((item) => item !== optimistic));
+      setQuestion(text);
       toast.error(errorMessage(err));
     } finally {
       setBusy(false);
+      setThinkingAt(null);
     }
   }
 
@@ -94,6 +155,7 @@ export function ChatPanel({ keyConfigured, onNeedKey }: { keyConfigured: boolean
           <Button
             size="xs"
             variant="ghost"
+            disabled={busy}
             onClick={() => {
               void api.newChatThread(scopeType, scopeId).then((thread) => setMessages(thread.messages));
             }}
@@ -115,7 +177,7 @@ export function ChatPanel({ keyConfigured, onNeedKey }: { keyConfigured: boolean
           <button
             key={value}
             type="button"
-            disabled={!enabled}
+            disabled={!enabled || busy}
             onClick={() => setScopeType(value)}
             className={cn(
               "rounded-full px-2.5 py-1 text-[11px]",
@@ -147,18 +209,25 @@ export function ChatPanel({ keyConfigured, onNeedKey }: { keyConfigured: boolean
         <div className="flex flex-col gap-3 pr-2">
           {messages.map((message, index) => (
             <div
-              key={`${message.role}-${index}`}
+              key={`${message.role}-${message.createdAt ?? index}`}
               className={cn(
                 "rounded-2xl px-3 py-2 text-sm leading-relaxed",
                 message.role === "user" ? "bg-primary/10" : "bg-black/20",
               )}
             >
-              <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                {message.role === "user" ? "You" : "BellaNote"}
-              </p>
-              <div className="whitespace-pre-wrap">{message.content}</div>
+              <MessageMeta
+                name={message.role === "user" ? "You" : "BellaNote"}
+                at={message.createdAt}
+              />
+              {message.role === "assistant" ? (
+                <ChatMarkdown content={message.content} />
+              ) : (
+                <div className="whitespace-pre-wrap">{message.content}</div>
+              )}
             </div>
           ))}
+          {busy && thinkingAt ? <ThinkingBubble at={thinkingAt} /> : null}
+          <div ref={bottomRef} />
         </div>
       </ScrollArea>
 
@@ -175,9 +244,14 @@ export function ChatPanel({ keyConfigured, onNeedKey }: { keyConfigured: boolean
             }
           }}
         />
-        <Button disabled={!scopeId || busy || !question.trim()} onClick={() => void send()}>
-          <Send />
-          Ask
+        <Button
+          disabled={!scopeId || busy || !question.trim()}
+          aria-busy={busy}
+          className={cn(busy && "disabled:opacity-100")}
+          onClick={() => void send()}
+        >
+          {busy ? <Loader2 className="animate-spin" /> : <Send />}
+          {busy ? "Asking…" : "Ask"}
         </Button>
       </div>
     </section>

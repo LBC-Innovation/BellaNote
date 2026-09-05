@@ -125,24 +125,15 @@ pub async fn ask(
             omitted.len()
         ));
     }
-    history.push(ChatTurn {
-        role: "user".into(),
-        content: question.to_string(),
-    });
+    history.push(ChatTurn::new("user", question));
     let mut model_messages = history
         .iter()
         .cloned()
         .take(history.len().saturating_sub(1))
         .collect::<Vec<_>>();
-    model_messages.push(ChatTurn {
-        role: "user".into(),
-        content: user_content,
-    });
+    model_messages.push(ChatTurn::new("user", user_content));
     let answer = llm::chat_completion(SYSTEM_PROMPT, &model_messages).await?;
-    history.push(ChatTurn {
-        role: "assistant".into(),
-        content: answer,
-    });
+    history.push(ChatTurn::new("assistant", answer));
     state
         .db
         .set_chat_messages(scope_type, scope_id, &history)?;

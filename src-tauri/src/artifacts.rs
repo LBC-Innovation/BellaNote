@@ -76,6 +76,7 @@ pub fn import_audio(app: &AppHandle, state: &Arc<AppState>, meeting_group_id: &s
         segments_json: "[]".into(),
         duration_ms: 0,
         created_at: Utc::now().to_rfc3339(),
+        whisper_model: String::new(),
     };
     state.db.insert_artifact(&artifact)?;
     spawn_transcribe(app.clone(), Arc::clone(state), id, dest);
@@ -126,6 +127,7 @@ pub fn import_transcript_file(
         segments_json,
         duration_ms,
         created_at: Utc::now().to_rfc3339(),
+        whisper_model: "imported".into(),
     };
     state.db.insert_artifact(&artifact)?;
     Ok(artifact)
@@ -170,9 +172,13 @@ fn spawn_transcribe(app: AppHandle, state: Arc<AppState>, id: String, audio_path
                     .join(" ");
                 let duration_ms = segments.iter().map(|s| s.end_ms).max().unwrap_or(0);
                 let json = serde_json::to_string(&segments).unwrap_or_else(|_| "[]".into());
-                let _ = state
-                    .db
-                    .set_artifact_transcript(&id, &transcript, &json, duration_ms);
+                let _ = state.db.set_artifact_transcript(
+                    &id,
+                    &transcript,
+                    &json,
+                    duration_ms,
+                    &crate::transcribe::whisper_model(),
+                );
             }
             Err(err) => {
                 let _ = state

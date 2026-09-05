@@ -40,6 +40,7 @@ export type Artifact = {
   segmentsJson: string;
   durationMs: number;
   createdAt: string;
+  whisperModel?: string;
 };
 
 export type TranscriptSegment = {

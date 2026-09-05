@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { ChevronRight, MoreHorizontal, Plus } from "lucide-react";
+import { ChevronRight, MoreHorizontal, PanelLeft, PanelLeftClose, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { CollapsedRail } from "@/components/collapsed-rail";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { NameDialog } from "@/components/name-dialog";
 import { Button } from "@/components/ui/button";
@@ -81,7 +82,13 @@ function TreeButton({
   );
 }
 
-export function LibraryPanel() {
+export function LibraryPanel({
+  collapsed,
+  onCollapsedChange,
+}: {
+  collapsed: boolean;
+  onCollapsedChange: (collapsed: boolean) => void;
+}) {
   const orgs = useLibraryStore((s) => s.orgs);
   const selection = useLibraryStore((s) => s.selection);
   const select = useLibraryStore((s) => s.select);
@@ -103,42 +110,75 @@ export function LibraryPanel() {
   }
 
   return (
-    <section className="glass-panel flex min-h-0 flex-col rounded-3xl p-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-          Library
-        </p>
-        <Button size="sm" onClick={() => setDialog({ type: "create-org" })}>
-          <Plus />
-          Organization
-        </Button>
-      </div>
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
+      {collapsed ? (
+        <CollapsedRail
+          label="Library"
+          expandLabel="Expand library"
+          onExpand={() => onCollapsedChange(false)}
+          icon={<PanelLeft className="size-4" />}
+          action={
+            <Button
+              size="icon-sm"
+              aria-label="New organization"
+              onClick={() => {
+                onCollapsedChange(false);
+                setDialog({ type: "create-org" });
+              }}
+            >
+              <Plus />
+            </Button>
+          }
+        />
+      ) : (
+        <section className="glass-panel flex min-h-0 flex-1 flex-col rounded-3xl p-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label="Collapse library"
+                onClick={() => onCollapsedChange(true)}
+              >
+                <PanelLeftClose />
+              </Button>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Library
+              </p>
+            </div>
+            <Button size="sm" onClick={() => setDialog({ type: "create-org" })}>
+              <Plus />
+              Organization
+            </Button>
+          </div>
 
-      <ScrollArea className="mt-3 min-h-0 flex-1">
-        {orgs.length === 0 ? (
-          <div className="px-1 pt-6">
-            <h2 className="text-base font-semibold tracking-tight">Start with an organization</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              Example: Duke, then Competitive Strategies, then Lecture Class 1.
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-1 pr-2">
-            {orgs.map((org) => (
-              <OrgBranch
-                key={org.id}
-                org={org}
-                selection={selection}
-                select={select}
-                onCreateTopic={() => setDialog({ type: "create-topic", organizationId: org.id })}
-                onCreateGroup={(topicId) => setDialog({ type: "create-group", topicId })}
-                onRename={(kind, id, name) => setDialog({ type: "rename", kind, id, name })}
-                onDelete={(kind, id, name) => setDialog({ type: "delete", kind, id, name })}
-              />
-            ))}
-          </div>
-        )}
-      </ScrollArea>
+          <ScrollArea className="mt-3 min-h-0 flex-1">
+            {orgs.length === 0 ? (
+              <div className="px-1 pt-6">
+                <h2 className="text-base font-semibold tracking-tight">Start with an organization</h2>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  Example: Duke, then Competitive Strategies, then Lecture Class 1.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1 pr-2">
+                {orgs.map((org) => (
+                  <OrgBranch
+                    key={org.id}
+                    org={org}
+                    selection={selection}
+                    select={select}
+                    onCreateTopic={() => setDialog({ type: "create-topic", organizationId: org.id })}
+                    onCreateGroup={(topicId) => setDialog({ type: "create-group", topicId })}
+                    onRename={(kind, id, name) => setDialog({ type: "rename", kind, id, name })}
+                    onDelete={(kind, id, name) => setDialog({ type: "delete", kind, id, name })}
+                  />
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </section>
+      )}
 
       <NameDialog
         open={dialog?.type === "create-org" || dialog?.type === "create-topic" || dialog?.type === "create-group" || dialog?.type === "rename"}
@@ -218,7 +258,7 @@ export function LibraryPanel() {
           }
         }}
       />
-    </section>
+    </div>
   );
 }
 

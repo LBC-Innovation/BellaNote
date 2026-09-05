@@ -10,11 +10,44 @@ import * as api from "@/lib/api";
 import { installArtifactListeners } from "@/store/useArtifactStore";
 import { useLibraryStore } from "@/store/useLibraryStore";
 
+const LIBRARY_COLLAPSED_KEY = "bellanote.libraryCollapsed";
+const TRANSCRIPT_COLLAPSED_KEY = "bellanote.transcriptCollapsed";
+
+function usePersistedFlag(key: string) {
+  const [value, setValue] = useState(() => {
+    try {
+      return localStorage.getItem(key) === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  function change(next: boolean) {
+    setValue(next);
+    try {
+      localStorage.setItem(key, next ? "1" : "0");
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }
+
+  return [value, change] as const;
+}
+
+function mainGridCols(libraryCollapsed: boolean, transcriptCollapsed: boolean) {
+  const library = libraryCollapsed ? "56px" : "300px";
+  const transcript = transcriptCollapsed ? "56px" : "minmax(0,1fr)";
+  const chat = transcriptCollapsed ? "minmax(0,1fr)" : "340px";
+  return `${library} ${transcript} ${chat}`;
+}
+
 export default function App() {
   const load = useLibraryStore((s) => s.load);
   const error = useLibraryStore((s) => s.error);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [keyConfigured, setKeyConfigured] = useState(false);
+  const [libraryCollapsed, setLibraryCollapsed] = usePersistedFlag(LIBRARY_COLLAPSED_KEY);
+  const [transcriptCollapsed, setTranscriptCollapsed] = usePersistedFlag(TRANSCRIPT_COLLAPSED_KEY);
 
   useEffect(() => {
     void load();
@@ -46,9 +79,12 @@ export default function App() {
 
       {error ? <p className="px-6 pb-2 text-sm text-destructive">{error}</p> : null}
 
-      <main className="grid min-h-0 flex-1 grid-cols-[300px_minmax(0,1fr)_340px] gap-3 px-3 pb-3">
-        <LibraryPanel />
-        <WorkspacePanel />
+      <main
+        className="grid min-h-0 flex-1 gap-3 px-3 pb-3 transition-[grid-template-columns] duration-300 ease-out"
+        style={{ gridTemplateColumns: mainGridCols(libraryCollapsed, transcriptCollapsed) }}
+      >
+        <LibraryPanel collapsed={libraryCollapsed} onCollapsedChange={setLibraryCollapsed} />
+        <WorkspacePanel collapsed={transcriptCollapsed} onCollapsedChange={setTranscriptCollapsed} />
         <ChatPanel keyConfigured={keyConfigured} onNeedKey={() => setSettingsOpen(true)} />
       </main>
 

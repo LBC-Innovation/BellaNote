@@ -41,7 +41,7 @@ fn worker_script_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../scripts/transcribe_worker.py")
 }
 
-fn whisper_model_arg() -> String {
+pub fn whisper_model() -> String {
     std::env::var("WHISPER_MODEL").unwrap_or_else(|_| "small.en".to_string())
 }
 
@@ -60,7 +60,7 @@ impl Transcriber {
     pub fn new() -> Result<Self> {
         let python = default_python();
         let script = worker_script_path();
-        let model = whisper_model_arg();
+        let model = whisper_model();
         if !script.is_file() {
             anyhow::bail!("transcribe worker not found at {:?}", script);
         }

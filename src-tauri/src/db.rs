@@ -61,6 +61,8 @@ pub struct Artifact {
     pub segments_json: String,
     pub duration_ms: i64,
     pub created_at: String,
+    #[serde(default)]
+    pub whisper_model: String,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -154,6 +156,7 @@ impl Db {
             );
             ",
         )?;
+        migrate_artifacts(&conn)?;
         Ok(Self {
             conn: Mutex::new(conn),
         })
@@ -431,8 +434,9 @@ impl Db {
         conn.execute(
             "INSERT INTO artifacts (
                 id, meeting_group_id, title, source_type, status, has_audio,
-                original_filename, error_message, transcript, segments_json, duration_ms, created_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                original_filename, error_message, transcript, segments_json, duration_ms, created_at,
+                whisper_model
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 artifact.id,
                 artifact.meeting_group_id,
@@ -445,7 +449,8 @@ impl Db {
                 artifact.transcript,
                 artifact.segments_json,
                 artifact.duration_ms,
-                artifact.created_at
+                artifact.created_at,
+                artifact.whisper_model
             ],
         )?;
         Ok(())
@@ -455,7 +460,8 @@ impl Db {
         let conn = self.lock()?;
         let mut stmt = conn.prepare(
             "SELECT id, meeting_group_id, title, source_type, status, has_audio,
-                    original_filename, error_message, transcript, segments_json, duration_ms, created_at
+                    original_filename, error_message, transcript, segments_json, duration_ms, created_at,
+                    whisper_model
              FROM artifacts
              WHERE meeting_group_id = ?1
              ORDER BY created_at ASC",
@@ -470,7 +476,8 @@ impl Db {
         let conn = self.lock()?;
         conn.query_row(
             "SELECT id, meeting_group_id, title, source_type, status, has_audio,
-                    original_filename, error_message, transcript, segments_json, duration_ms, created_at
+                    original_filename, error_message, transcript, segments_json, duration_ms, created_at,
+                    whisper_model
              FROM artifacts WHERE id = ?1",
             params![id],
             map_artifact,
@@ -521,13 +528,15 @@ impl Db {
         transcript: &str,
         segments_json: &str,
         duration_ms: i64,
+        whisper_model: &str,
     ) -> AppResult<()> {
         let conn = self.lock()?;
         conn.execute(
             "UPDATE artifacts
-             SET transcript = ?1, segments_json = ?2, duration_ms = ?3, status = 'ready', error_message = ''
-             WHERE id = ?4",
-            params![transcript, segments_json, duration_ms, id],
+             SET transcript = ?1, segments_json = ?2, duration_ms = ?3, status = 'ready',
+                 error_message = '', whisper_model = ?4
+             WHERE id = ?5",
+            params![transcript, segments_json, duration_ms, whisper_model, id],
         )?;
         Ok(())
     }
@@ -540,18 +549,21 @@ impl Db {
         let sql = match scope_type {
             "artifact" => {
                 "SELECT id, meeting_group_id, title, source_type, status, has_audio,
-                        original_filename, error_message, transcript, segments_json, duration_ms, created_at
+                        original_filename, error_message, transcript, segments_json, duration_ms, created_at,
+                        whisper_model
                  FROM artifacts WHERE id = ?1 AND status = 'ready'"
             }
             "meeting_group" => {
                 "SELECT id, meeting_group_id, title, source_type, status, has_audio,
-                        original_filename, error_message, transcript, segments_json, duration_ms, created_at
+                        original_filename, error_message, transcript, segments_json, duration_ms, created_at,
+                        whisper_model
                  FROM artifacts WHERE meeting_group_id = ?1 AND status = 'ready'
                  ORDER BY created_at DESC"
             }
             "topic" => {
                 "SELECT a.id, a.meeting_group_id, a.title, a.source_type, a.status, a.has_audio,
-                        a.original_filename, a.error_message, a.transcript, a.segments_json, a.duration_ms, a.created_at
+                        a.original_filename, a.error_message, a.transcript, a.segments_json, a.duration_ms, a.created_at,
+                        a.whisper_model
                  FROM artifacts a
                  JOIN meeting_groups g ON g.id = a.meeting_group_id
                  WHERE g.topic_id = ?1 AND a.status = 'ready'
@@ -559,7 +571,8 @@ impl Db {
             }
             "organization" => {
                 "SELECT a.id, a.meeting_group_id, a.title, a.source_type, a.status, a.has_audio,
-                        a.original_filename, a.error_message, a.transcript, a.segments_json, a.duration_ms, a.created_at
+                        a.original_filename, a.error_message, a.transcript, a.segments_json, a.duration_ms, a.created_at,
+                        a.whisper_model
                  FROM artifacts a
                  JOIN meeting_groups g ON g.id = a.meeting_group_id
                  JOIN topic_categories t ON t.id = g.topic_id
@@ -698,7 +711,28 @@ fn map_artifact(row: &rusqlite::Row<'_>) -> rusqlite::Result<Artifact> {
         segments_json: row.get(9)?,
         duration_ms: row.get(10)?,
         created_at: row.get(11)?,
+        whisper_model: row.get(12)?,
     })
+}
+
+fn migrate_artifacts(conn: &Connection) -> AppResult<()> {
+    let _ = conn.execute(
+        "ALTER TABLE artifacts ADD COLUMN whisper_model TEXT NOT NULL DEFAULT ''",
+        [],
+    );
+    conn.execute(
+        "UPDATE artifacts
+         SET whisper_model = 'small.en'
+         WHERE whisper_model = '' AND source_type = 'audio_upload' AND status = 'ready'",
+        [],
+    )?;
+    conn.execute(
+        "UPDATE artifacts
+         SET whisper_model = 'imported'
+         WHERE whisper_model = '' AND source_type = 'transcript_import'",
+        [],
+    )?;
+    Ok(())
 }
 
 fn get_meeting_group(conn: &Connection, id: &str) -> AppResult<MeetingGroup> {

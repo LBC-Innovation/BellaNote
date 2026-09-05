@@ -1,54 +1,89 @@
-import { FolderPlus, Sparkles } from "lucide-react";
+import { FileText, FolderPlus, PanelLeftClose, Sparkles } from "lucide-react";
 import { ArtifactWorkspace } from "@/components/artifact-workspace";
+import { CollapsedRail } from "@/components/collapsed-rail";
 import { BreadcrumbTrail } from "@/components/library-panel";
+import { Button } from "@/components/ui/button";
 import { selectedContext } from "@/lib/selection";
 import { useLibraryStore } from "@/store/useLibraryStore";
 
-export function WorkspacePanel() {
+export function WorkspacePanel({
+  collapsed,
+  onCollapsedChange,
+}: {
+  collapsed: boolean;
+  onCollapsedChange: (collapsed: boolean) => void;
+}) {
   const orgs = useLibraryStore((s) => s.orgs);
   const selection = useLibraryStore((s) => s.selection);
   const { org, topic, group } = selectedContext(orgs, selection);
 
-  return (
-    <section className="glass-panel flex min-h-0 flex-col rounded-3xl p-5">
-      <BreadcrumbTrail />
-      <div
-        className={
-          group
-            ? "mt-4 flex min-h-0 flex-1 flex-col"
-            : "mt-6 flex min-h-0 flex-1 flex-col items-center justify-center text-center"
-        }
-      >
-        {!org ? (
-          <>
-            <div className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-primary/15 text-primary">
-              <Sparkles className="size-5" />
-            </div>
-            <h1 className="max-w-md text-2xl font-semibold tracking-tight">
-              Stay in the meeting. BellaNote writes the beautiful note.
-            </h1>
-            <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted-foreground">
-              Create an organization to begin the Duke-style tree: organization, topic, then a
-              meeting group for files.
-            </p>
-          </>
-        ) : !topic ? (
-          <EmptyHint
-            title={`Add a topic in ${org.name}`}
-            body="Example: Competitive Strategies. Meeting groups and files live under a topic."
-          />
-        ) : !group ? (
-          <EmptyHint
-            title={`Add a meeting group in ${topic.name}`}
-            body="Example: Lecture Class 1. Audio and transcripts will land here."
-          />
-        ) : (
-          <div className="flex min-h-0 w-full flex-1 flex-col items-stretch text-left">
-            <ArtifactWorkspace groupId={group.id} groupName={group.name} />
-          </div>
-        )}
+  if (collapsed) {
+    return (
+      <div className="flex h-full min-h-0 min-w-0 flex-col">
+        <CollapsedRail
+          label="Transcript"
+          expandLabel="Expand transcript"
+          onExpand={() => onCollapsedChange(false)}
+          icon={<FileText className="size-4" />}
+        />
       </div>
-    </section>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
+      <section className="glass-panel flex min-h-0 flex-1 flex-col rounded-3xl p-5">
+        <div className="flex min-w-0 items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Collapse transcript"
+            onClick={() => onCollapsedChange(true)}
+          >
+            <PanelLeftClose />
+          </Button>
+          <div className="min-w-0 flex-1">
+            <BreadcrumbTrail />
+          </div>
+        </div>
+        <div
+          className={
+            group
+              ? "mt-4 flex min-h-0 flex-1 flex-col"
+              : "mt-6 flex min-h-0 flex-1 flex-col items-center justify-center text-center"
+          }
+        >
+          {!org ? (
+            <>
+              <div className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                <Sparkles className="size-5" />
+              </div>
+              <h1 className="max-w-md text-2xl font-semibold tracking-tight">
+                Stay in the meeting. BellaNote writes the beautiful note.
+              </h1>
+              <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted-foreground">
+                Create an organization to begin the Duke-style tree: organization, topic, then a
+                meeting group for files.
+              </p>
+            </>
+          ) : !topic ? (
+            <EmptyHint
+              title={`Add a topic in ${org.name}`}
+              body="Example: Competitive Strategies. Meeting groups and files live under a topic."
+            />
+          ) : !group ? (
+            <EmptyHint
+              title={`Add a meeting group in ${topic.name}`}
+              body="Example: Lecture Class 1. Audio and transcripts will land here."
+            />
+          ) : (
+            <div className="flex min-h-0 w-full flex-1 flex-col items-stretch text-left">
+              <ArtifactWorkspace groupId={group.id} groupName={group.name} />
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
   );
 }
 

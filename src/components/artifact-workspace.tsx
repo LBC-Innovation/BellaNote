@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FileAudio, FileText, Pause, Play, Plus } from "lucide-react";
+import { Check, FileAudio, FileText, Link2, Link2Off, Loader2, Pause, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { NameDialog } from "@/components/name-dialog";
 import { StaticWaveform } from "@/components/static-waveform";
+import { WorkspaceCard } from "@/components/workspace-card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import * as api from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
+import { formatAddedDate, transcriptionQuality, type QualityKind } from "@/lib/quality";
 import { formatTimestamp, parseSegments } from "@/lib/segments";
 import { cn } from "@/lib/utils";
 import { useArtifactStore } from "@/store/useArtifactStore";
@@ -37,14 +40,34 @@ async function peaksFromUrl(url: string): Promise<number[]> {
   return peaks.map((value) => value / peak);
 }
 
+function qualityBadge(kind: QualityKind) {
+  if (kind === "failed") return "destructive" as const;
+  if (kind === "small" || kind === "medium" || kind === "large") return "default" as const;
+  return "secondary" as const;
+}
+
+function activeSegmentIndex(segments: { start_ms: number; end_ms: number }[], timeMs: number) {
+  if (segments.length === 0 || timeMs < 0) return -1;
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    if (timeMs >= seg.start_ms && timeMs < Math.max(seg.end_ms, seg.start_ms + 1)) return i;
+  }
+  let last = -1;
+  for (let i = 0; i < segments.length; i++) {
+    if (segments[i].start_ms <= timeMs) last = i;
+  }
+  return last;
+}
+
 export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; groupName: string }) {
   const artifacts = useArtifactStore((s) => s.artifacts);
   const activeId = useArtifactStore((s) => s.activeId);
   const setActive = useArtifactStore((s) => s.setActive);
   const load = useArtifactStore((s) => s.load);
   const active = artifacts.find((item) => item.id === activeId) ?? null;
-  const [rename, setRename] = useState<Artifact | null>(null);
   const [remove, setRemove] = useState<Artifact | null>(null);
+  const [filesOpen, setFilesOpen] = useState(true);
+  const [detailOpen, setDetailOpen] = useState(true);
 
   useEffect(() => {
     void load(groupId);
@@ -70,7 +93,7 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex shrink-0 items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{groupName}</h1>
           <p className="text-sm text-muted-foreground">Audio and imported transcripts for this meeting group.</p>
@@ -87,60 +110,48 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
         </div>
       </div>
 
-      <div className="mt-4 grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)] gap-3">
-        <ScrollArea className="min-h-0 rounded-2xl bg-black/10 p-2">
-          {artifacts.length === 0 ? (
-            <p className="px-2 py-6 text-sm text-muted-foreground">
-              Add an audio file or a Zoom/Teams transcript.
-            </p>
+      <div className="mt-4 flex min-h-0 flex-1 flex-col gap-3">
+        <WorkspaceCard
+          open={filesOpen}
+          onOpenChange={setFilesOpen}
+          title="Files"
+          meta={artifacts.length === 1 ? "1 file" : `${artifacts.length} files`}
+        >
+          <FilesTable
+            artifacts={artifacts}
+            activeId={activeId}
+            onSelect={setActive}
+            onRename={async (id, name) => {
+              await api.renameArtifact(id, name);
+              await load(groupId);
+            }}
+            onDelete={setRemove}
+          />
+        </WorkspaceCard>
+
+        <WorkspaceCard
+          open={detailOpen}
+          onOpenChange={setDetailOpen}
+          title={active?.title ?? "Transcript"}
+          meta={
+            active
+              ? active.hasAudio
+                ? "Audio + transcript"
+                : "Imported transcript"
+              : undefined
+          }
+        >
+          {active ? (
+            <ArtifactDetail artifact={active} />
           ) : (
-            <div className="flex flex-col gap-1">
-              {artifacts.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActive(item.id)}
-                  className={cn(
-                    "rounded-xl px-3 py-2 text-left",
-                    item.id === activeId ? "bg-primary/15" : "hover:bg-white/5",
-                  )}
-                >
-                  <div className="truncate text-sm font-medium">{item.title}</div>
-                  <div className="text-[11px] capitalize text-muted-foreground">{item.status}</div>
-                </button>
-              ))}
+            <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">
+              <Plus className="mr-2 size-4" />
+              Select or add a file
             </div>
           )}
-        </ScrollArea>
-        {active ? (
-          <ArtifactDetail
-            artifact={active}
-            onRename={() => setRename(active)}
-            onDelete={() => setRemove(active)}
-          />
-        ) : (
-          <div className="flex items-center justify-center text-sm text-muted-foreground">
-            <Plus className="mr-2 size-4" />
-            Select or add a file
-          </div>
-        )}
+        </WorkspaceCard>
       </div>
 
-      <NameDialog
-        open={Boolean(rename)}
-        title="Rename file"
-        description="This name appears in the library and in chat sources."
-        confirmLabel="Save"
-        initialValue={rename?.title ?? ""}
-        onOpenChange={(open) => {
-          if (!open) setRename(null);
-        }}
-        onSubmit={async (name) => {
-          if (!rename) return;
-          await api.renameArtifact(rename.id, name);
-          await load(groupId);
-        }}
-      />
       <ConfirmDialog
         open={Boolean(remove)}
         title={remove ? `Remove ${remove.title}?` : "Remove"}
@@ -159,27 +170,233 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
   );
 }
 
-function ArtifactDetail({
-  artifact,
+function FilesTable({
+  artifacts,
+  activeId,
+  onSelect,
   onRename,
   onDelete,
 }: {
-  artifact: Artifact;
-  onRename: () => void;
+  artifacts: Artifact[];
+  activeId: string | null;
+  onSelect: (id: string) => void;
+  onRename: (id: string, name: string) => Promise<void>;
+  onDelete: (artifact: Artifact) => void;
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [savedId, setSavedId] = useState<string | null>(null);
+
+  if (artifacts.length === 0) {
+    return (
+      <p className="px-2 py-8 text-sm text-muted-foreground">
+        Add an audio file or a Zoom/Teams transcript.
+      </p>
+    );
+  }
+
+  return (
+    <ScrollArea className="min-h-0 flex-1">
+      <div className="flex flex-col gap-1 pr-1">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-4 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <span>File</span>
+          <span className="w-[7.25rem]">Added</span>
+          <span className="w-[6.75rem]">Quality</span>
+          <span className="w-14" />
+        </div>
+        {artifacts.map((item) => (
+          <FileRow
+            key={item.id}
+            item={item}
+            selected={item.id === activeId}
+            editing={editingId === item.id}
+            justSaved={savedId === item.id}
+            onSelect={() => onSelect(item.id)}
+            onStartEdit={() => {
+              onSelect(item.id);
+              setEditingId(item.id);
+            }}
+            onCancelEdit={() => setEditingId(null)}
+            onSave={async (name) => {
+              await onRename(item.id, name);
+              setEditingId(null);
+              setSavedId(item.id);
+              window.setTimeout(() => {
+                setSavedId((current) => (current === item.id ? null : current));
+              }, 900);
+            }}
+            onDelete={() => onDelete(item)}
+          />
+        ))}
+      </div>
+    </ScrollArea>
+  );
+}
+
+function FileRow({
+  item,
+  selected,
+  editing,
+  justSaved,
+  onSelect,
+  onStartEdit,
+  onCancelEdit,
+  onSave,
+  onDelete,
+}: {
+  item: Artifact;
+  selected: boolean;
+  editing: boolean;
+  justSaved: boolean;
+  onSelect: () => void;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
+  onSave: (name: string) => Promise<void>;
   onDelete: () => void;
 }) {
+  const quality = transcriptionQuality(item);
+  const [draft, setDraft] = useState(item.title);
+  const saving = useRef(false);
+  const ignoreBlur = useRef(false);
+
+  useEffect(() => {
+    if (editing) setDraft(item.title);
+  }, [editing, item.title]);
+
+  async function commit() {
+    if (ignoreBlur.current) {
+      ignoreBlur.current = false;
+      return;
+    }
+    if (saving.current) return;
+    const name = draft.trim();
+    if (!name || name === item.title) {
+      onCancelEdit();
+      return;
+    }
+    saving.current = true;
+    try {
+      await onSave(name);
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      saving.current = false;
+    }
+  }
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => {
+        if (!editing) onSelect();
+      }}
+      onKeyDown={(event) => {
+        if (editing) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
+      className={cn(
+        "grid w-full grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-4 rounded-xl border px-4 py-2.5 text-left text-sm transition-colors",
+        selected ? "border-primary/40 bg-primary/18" : "border-transparent hover:bg-white/5",
+      )}
+    >
+      <span className="min-w-0">
+        {editing ? (
+          <Input
+            autoFocus
+            value={draft}
+            maxLength={80}
+            aria-label="File title"
+            className="h-7 text-sm font-medium"
+            onClick={(event) => event.stopPropagation()}
+            onChange={(event) => setDraft(event.target.value)}
+            onBlur={() => {
+              void commit();
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                event.currentTarget.blur();
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                ignoreBlur.current = true;
+                setDraft(item.title);
+                onCancelEdit();
+              }
+            }}
+          />
+        ) : (
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className={cn("block truncate font-medium", justSaved && "title-saved")}>
+              {item.title}
+            </span>
+            {justSaved ? <Check className="size-3.5 shrink-0 text-primary" /> : null}
+          </span>
+        )}
+        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+          {item.originalFilename}
+        </span>
+      </span>
+      <span className="w-[7.25rem] whitespace-nowrap text-muted-foreground">
+        {formatAddedDate(item.createdAt)}
+      </span>
+      <span className="w-[6.75rem]">
+        <Badge variant={qualityBadge(quality.kind)} className="capitalize">
+          {quality.kind === "importing" ? <Loader2 className="animate-spin" /> : null}
+          {quality.label}
+        </Badge>
+      </span>
+      <span
+        className="flex w-14 justify-end gap-0.5"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          aria-label="Rename file"
+          onClick={onStartEdit}
+        >
+          <Pencil />
+        </Button>
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          aria-label="Delete file"
+          className="text-muted-foreground hover:text-destructive"
+          onClick={onDelete}
+        >
+          <Trash2 />
+        </Button>
+      </span>
+    </div>
+  );
+}
+
+function ArtifactDetail({ artifact }: { artifact: Artifact }) {
   const segments = useMemo(() => parseSegments(artifact.segmentsJson), [artifact.segmentsJson]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const lineRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [peaks, setPeaks] = useState<number[]>([]);
   const [progress, setProgress] = useState(0);
+  const [currentTimeMs, setCurrentTimeMs] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [followPlayback, setFollowPlayback] = useState(true);
+
+  const activeIndex = useMemo(
+    () => activeSegmentIndex(segments, currentTimeMs),
+    [segments, currentTimeMs],
+  );
 
   useEffect(() => {
     let cancelled = false;
     setAudioUrl(null);
     setPeaks([]);
     setProgress(0);
+    setCurrentTimeMs(0);
     setPlaying(false);
     if (!artifact.hasAudio) return;
     void api.getArtifactAudioPath(artifact.id).then(async (path) => {
@@ -202,6 +419,7 @@ function ArtifactDetail({
     if (!audio) return;
     const onTime = () => {
       const duration = audio.duration || artifact.durationMs / 1000;
+      setCurrentTimeMs(audio.currentTime * 1000);
       setProgress(duration ? audio.currentTime / duration : 0);
     };
     const onPlay = () => setPlaying(true);
@@ -216,11 +434,17 @@ function ArtifactDetail({
     };
   }, [audioUrl, artifact.durationMs]);
 
+  useEffect(() => {
+    if (!followPlayback || activeIndex < 0) return;
+    lineRefs.current[activeIndex]?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [activeIndex, followPlayback]);
+
   function seek(ratio: number) {
     const audio = audioRef.current;
     if (!audio) return;
     const duration = audio.duration || artifact.durationMs / 1000;
     audio.currentTime = ratio * duration;
+    setCurrentTimeMs(ratio * duration * 1000);
     setProgress(ratio);
   }
 
@@ -228,29 +452,13 @@ function ArtifactDetail({
     const audio = audioRef.current;
     if (!audio || !artifact.hasAudio) return;
     audio.currentTime = ms / 1000;
+    setCurrentTimeMs(ms);
   }
 
   return (
-    <div className="flex min-h-0 flex-col rounded-2xl bg-black/10 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{artifact.title}</h2>
-          <p className="text-xs text-muted-foreground">
-            {artifact.hasAudio ? "Audio" : "Imported transcript"} · {artifact.originalFilename}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button size="xs" variant="ghost" onClick={onRename}>
-            Rename
-          </Button>
-          <Button size="xs" variant="ghost" onClick={onDelete}>
-            Remove
-          </Button>
-        </div>
-      </div>
-
+    <div className="flex min-h-0 flex-1 flex-col">
       {artifact.hasAudio ? (
-        <div className="mt-4">
+        <div className="shrink-0">
           {audioUrl ? <audio ref={audioRef} src={audioUrl} className="hidden" /> : null}
           <div className="flex items-center gap-3">
             <Button
@@ -275,30 +483,53 @@ function ArtifactDetail({
                 </div>
               )}
             </div>
+            <Button
+              size="sm"
+              variant={followPlayback ? "secondary" : "ghost"}
+              aria-pressed={followPlayback}
+              onClick={() => setFollowPlayback((value) => !value)}
+            >
+              {followPlayback ? <Link2 /> : <Link2Off />}
+              Follow
+            </Button>
           </div>
         </div>
       ) : (
-        <p className="mt-3 text-sm text-muted-foreground">No waveform — this meeting is transcript only.</p>
+        <p className="shrink-0 text-sm text-muted-foreground">No waveform — this meeting is transcript only.</p>
       )}
 
-      <ScrollArea className="mt-4 min-h-0 flex-1">
+      <ScrollArea className="mt-3 min-h-0 flex-1">
         {artifact.status === "transcribing" || artifact.status === "queued" ? (
-          <p className="text-sm text-muted-foreground">Transcribing with small.en. This can take a minute on a long lecture.</p>
+          <p className="text-sm text-muted-foreground">
+            Transcribing with small.en. This can take a minute on a long lecture.
+          </p>
         ) : artifact.status === "failed" ? (
           <p className="text-sm text-destructive">{artifact.errorMessage || "Transcription failed."}</p>
         ) : segments.length > 0 ? (
-          <div className="flex flex-col gap-2 pr-2">
+          <div className="flex flex-col gap-1 py-0.5 pr-2">
             {segments.map((seg, index) => (
               <button
                 key={`${seg.start_ms}-${index}`}
+                ref={(node) => {
+                  lineRefs.current[index] = node;
+                }}
                 type="button"
-                className="rounded-xl px-2 py-1.5 text-left hover:bg-white/5"
+                className={cn(
+                  "w-full appearance-none rounded-xl border text-left transition-colors",
+                  index === activeIndex
+                    ? "border-primary/40 bg-primary/18"
+                    : "border-transparent hover:bg-white/5",
+                )}
                 onClick={() => seekMs(seg.start_ms)}
               >
-                {seg.start_ms > 0 ? (
-                  <span className="mr-2 font-mono text-[11px] text-primary">{formatTimestamp(seg.start_ms)}</span>
-                ) : null}
-                <span className="text-sm leading-relaxed">{seg.text}</span>
+                <span className="block px-4 py-2.5 text-sm leading-6">
+                  {seg.start_ms > 0 ? (
+                    <span className="mr-2 font-mono text-[11px] text-primary">
+                      {formatTimestamp(seg.start_ms)}
+                    </span>
+                  ) : null}
+                  {seg.text}
+                </span>
               </button>
             ))}
           </div>
