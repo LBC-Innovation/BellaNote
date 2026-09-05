@@ -10,8 +10,12 @@ An earlier macOS proof of concept (Tauri 2, on-device Whisper, system-audio capt
 
 ```bash
 npm install
-pip install -r requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -r requirements.txt
 npm run tauri:dev
 ```
 
-Requires Node 20+, Rust (via rustup), Xcode Command Line Tools, and `faster-whisper` on `python3`. Add your OpenAI API token in Settings to use scoped chat.
+Homebrew’s Python is “externally managed,” so do **not** `pip install` into the system interpreter. The app uses `.venv/bin/python3` when that folder exists (or `ECHO_PYTHON` if you point it elsewhere).
+
+Requires Node 20+, Rust (via rustup), and Xcode Command Line Tools. Add your OpenAI API token in Settings to use scoped chat.

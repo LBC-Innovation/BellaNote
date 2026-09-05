@@ -45,9 +45,20 @@ fn whisper_model_arg() -> String {
     std::env::var("WHISPER_MODEL").unwrap_or_else(|_| "small.en".to_string())
 }
 
+fn default_python() -> PathBuf {
+    if let Ok(p) = std::env::var("ECHO_PYTHON") {
+        return PathBuf::from(p);
+    }
+    let venv = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.venv/bin/python3");
+    if venv.is_file() {
+        return venv;
+    }
+    PathBuf::from("python3")
+}
+
 impl Transcriber {
     pub fn new() -> Result<Self> {
-        let python = std::env::var("ECHO_PYTHON").unwrap_or_else(|_| "python3".to_string());
+        let python = default_python();
         let script = worker_script_path();
         let model = whisper_model_arg();
         if !script.is_file() {
@@ -62,7 +73,12 @@ impl Transcriber {
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .spawn()
-            .with_context(|| format!("failed to spawn {python} (set ECHO_PYTHON?)"))?;
+            .with_context(|| {
+                format!(
+                    "failed to spawn {:?} (create .venv or set ECHO_PYTHON)",
+                    python
+                )
+            })?;
 
         let stdout = BufReader::new(child.stdout.take().context("no stdout")?);
         let stdin = BufWriter::new(child.stdin.take().context("no stdin")?);
