@@ -1,8 +1,11 @@
+mod artifacts;
 mod commands;
 mod db;
 mod error;
+mod import_transcript;
 mod paths;
 mod state;
+mod transcribe;
 
 use std::sync::Arc;
 use tauri::Manager;
@@ -21,7 +24,10 @@ pub fn run() {
             if let Ok(dir) = paths::library_dir(handle) {
                 std::fs::create_dir_all(dir).ok();
             }
-            app.manage(Arc::new(AppState { db }));
+            app.manage(Arc::new(AppState {
+                db,
+                transcriber: std::sync::Mutex::new(None),
+            }));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -35,6 +41,13 @@ pub fn run() {
             commands::create_meeting_group,
             commands::rename_meeting_group,
             commands::delete_meeting_group,
+            commands::list_artifacts,
+            commands::get_artifact,
+            commands::import_audio,
+            commands::import_transcript,
+            commands::rename_artifact,
+            commands::delete_artifact,
+            commands::get_artifact_audio_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running BellaNote");

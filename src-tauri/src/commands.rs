@@ -1,9 +1,10 @@
-use crate::db::{LibraryOrganization, MeetingGroup, Organization, Topic};
+use crate::artifacts;
+use crate::db::{Artifact, LibraryOrganization, MeetingGroup, Organization, Topic};
 use crate::error::AppResult;
 use crate::state::AppState;
 use serde::Deserialize;
 use std::sync::Arc;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -99,4 +100,65 @@ pub fn rename_meeting_group(
 #[tauri::command]
 pub fn delete_meeting_group(state: State<'_, Arc<AppState>>, args: IdArgs) -> AppResult<()> {
     state.db.delete_meeting_group(&args.id)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupIdArgs {
+    pub meeting_group_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportFileArgs {
+    pub meeting_group_id: String,
+    pub path: String,
+}
+
+#[tauri::command]
+pub fn list_artifacts(
+    state: State<'_, Arc<AppState>>,
+    args: GroupIdArgs,
+) -> AppResult<Vec<Artifact>> {
+    state.db.list_artifacts(&args.meeting_group_id)
+}
+
+#[tauri::command]
+pub fn get_artifact(state: State<'_, Arc<AppState>>, args: IdArgs) -> AppResult<Artifact> {
+    state.db.get_artifact(&args.id)
+}
+
+#[tauri::command]
+pub fn import_audio(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+    args: ImportFileArgs,
+) -> AppResult<Artifact> {
+    artifacts::import_audio(&app, &state, &args.meeting_group_id, &args.path)
+}
+
+#[tauri::command]
+pub fn import_transcript(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+    args: ImportFileArgs,
+) -> AppResult<Artifact> {
+    artifacts::import_transcript_file(&app, &state, &args.meeting_group_id, &args.path)
+}
+
+#[tauri::command]
+pub fn rename_artifact(state: State<'_, Arc<AppState>>, args: RenameArgs) -> AppResult<Artifact> {
+    state.db.rename_artifact(&args.id, &args.name)
+}
+
+#[tauri::command]
+pub fn delete_artifact(app: AppHandle, state: State<'_, Arc<AppState>>, args: IdArgs) -> AppResult<()> {
+    state.db.delete_artifact(&args.id)?;
+    artifacts::delete_artifact_files(&app, &args.id);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_artifact_audio_path(app: AppHandle, args: IdArgs) -> AppResult<Option<String>> {
+    Ok(artifacts::find_audio_path(&app, &args.id).map(|p| p.to_string_lossy().into_owned()))
 }

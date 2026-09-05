@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { LibraryOrganization, MeetingGroup, Organization, Topic } from "./types";
+import type { Artifact, LibraryOrganization, MeetingGroup, Organization, Topic } from "./types";
 
 export function getLibrary() {
   return invoke<LibraryOrganization[]>("get_library");
@@ -41,4 +41,32 @@ export function renameMeetingGroup(id: string, name: string) {
 
 export function deleteMeetingGroup(id: string) {
   return invoke<void>("delete_meeting_group", { args: { id } });
+}
+
+export function listArtifacts(meetingGroupId: string) {
+  return invoke<Artifact[]>("list_artifacts", { args: { meetingGroupId } });
+}
+
+export function getArtifact(id: string) {
+  return invoke<Artifact>("get_artifact", { args: { id } });
+}
+
+export function importAudio(meetingGroupId: string, path: string) {
+  return invoke<Artifact>("import_audio", { args: { meetingGroupId, path } });
+}
+
+export function importTranscript(meetingGroupId: string, path: string) {
+  return invoke<Artifact>("import_transcript", { args: { meetingGroupId, path } });
+}
+
+export function renameArtifact(id: string, name: string) {
+  return invoke<Artifact>("rename_artifact", { args: { id, name } });
+}
+
+export function deleteArtifact(id: string) {
+  return invoke<void>("delete_artifact", { args: { id } });
+}
+
+export function getArtifactAudioPath(id: string) {
+  return invoke<string | null>("get_artifact_audio_path", { args: { id } });
 }

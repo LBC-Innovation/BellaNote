@@ -5,6 +5,7 @@ import { LibraryPanel } from "@/components/library-panel";
 import { WorkspacePanel } from "@/components/workspace-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { installArtifactListeners } from "@/store/useArtifactStore";
 import { useLibraryStore } from "@/store/useLibraryStore";
 
 export default function App() {
@@ -13,6 +14,7 @@ export default function App() {
 
   useEffect(() => {
     void load();
+    void installArtifactListeners();
   }, [load]);
 
   return (

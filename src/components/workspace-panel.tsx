@@ -1,4 +1,5 @@
 import { FolderPlus, Sparkles } from "lucide-react";
+import { ArtifactWorkspace } from "@/components/artifact-workspace";
 import { BreadcrumbTrail } from "@/components/library-panel";
 import { selectedContext } from "@/lib/selection";
 import { useLibraryStore } from "@/store/useLibraryStore";
@@ -11,7 +12,13 @@ export function WorkspacePanel() {
   return (
     <section className="glass-panel flex min-h-0 flex-col rounded-3xl p-5">
       <BreadcrumbTrail />
-      <div className="mt-6 flex min-h-0 flex-1 flex-col items-center justify-center text-center">
+      <div
+        className={
+          group
+            ? "mt-4 flex min-h-0 flex-1 flex-col"
+            : "mt-6 flex min-h-0 flex-1 flex-col items-center justify-center text-center"
+        }
+      >
         {!org ? (
           <>
             <div className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-primary/15 text-primary">
@@ -36,10 +43,9 @@ export function WorkspacePanel() {
             body="Example: Lecture Class 1. Audio and transcripts will land here."
           />
         ) : (
-          <EmptyHint
-            title={group.name}
-            body="Audio uploads and imported transcripts will appear here next."
-          />
+          <div className="flex min-h-0 w-full flex-1 flex-col items-stretch text-left">
+            <ArtifactWorkspace groupId={group.id} groupName={group.name} />
+          </div>
         )}
       </div>
     </section>

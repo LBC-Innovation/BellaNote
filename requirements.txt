@@ -1,0 +1,2 @@
+# Used by scripts/transcribe_worker.py (faster-whisper backend)
+faster-whisper>=1.0.3

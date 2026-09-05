@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-delete-artifact"
+description = "Enables the delete_artifact command without any pre-configured scope."
+commands.allow = ["delete_artifact"]
+
+[[permission]]
+identifier = "deny-delete-artifact"
+description = "Denies the delete_artifact command without any pre-configured scope."
+commands.deny = ["delete_artifact"]

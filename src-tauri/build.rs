@@ -11,6 +11,13 @@ fn main() {
             "create_meeting_group",
             "rename_meeting_group",
             "delete_meeting_group",
+            "list_artifacts",
+            "get_artifact",
+            "import_audio",
+            "import_transcript",
+            "rename_artifact",
+            "delete_artifact",
+            "get_artifact_audio_path",
         ]),
     ))
     .expect("tauri build failed");

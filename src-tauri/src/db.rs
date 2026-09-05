@@ -47,6 +47,23 @@ pub struct LibraryTopic {
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct Artifact {
+    pub id: String,
+    pub meeting_group_id: String,
+    pub title: String,
+    pub source_type: String,
+    pub status: String,
+    pub has_audio: bool,
+    pub original_filename: String,
+    pub error_message: String,
+    pub transcript: String,
+    pub segments_json: String,
+    pub duration_ms: i64,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct LibraryOrganization {
     #[serde(flatten)]
     pub organization: Organization,
@@ -401,6 +418,189 @@ impl Db {
         }
         Ok(())
     }
+
+    pub fn insert_artifact(&self, artifact: &Artifact) -> AppResult<()> {
+        let conn = self.lock()?;
+        ensure_exists(
+            &conn,
+            "SELECT 1 FROM meeting_groups WHERE id = ?1",
+            &artifact.meeting_group_id,
+            "Meeting group",
+        )?;
+        conn.execute(
+            "INSERT INTO artifacts (
+                id, meeting_group_id, title, source_type, status, has_audio,
+                original_filename, error_message, transcript, segments_json, duration_ms, created_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            params![
+                artifact.id,
+                artifact.meeting_group_id,
+                artifact.title,
+                artifact.source_type,
+                artifact.status,
+                artifact.has_audio as i64,
+                artifact.original_filename,
+                artifact.error_message,
+                artifact.transcript,
+                artifact.segments_json,
+                artifact.duration_ms,
+                artifact.created_at
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn list_artifacts(&self, meeting_group_id: &str) -> AppResult<Vec<Artifact>> {
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, meeting_group_id, title, source_type, status, has_audio,
+                    original_filename, error_message, transcript, segments_json, duration_ms, created_at
+             FROM artifacts
+             WHERE meeting_group_id = ?1
+             ORDER BY created_at ASC",
+        )?;
+        let rows = stmt
+            .query_map(params![meeting_group_id], map_artifact)?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    pub fn get_artifact(&self, id: &str) -> AppResult<Artifact> {
+        let conn = self.lock()?;
+        conn.query_row(
+            "SELECT id, meeting_group_id, title, source_type, status, has_audio,
+                    original_filename, error_message, transcript, segments_json, duration_ms, created_at
+             FROM artifacts WHERE id = ?1",
+            params![id],
+            map_artifact,
+        )
+        .map_err(|_| AppError::Message("Artifact not found.".into()))
+    }
+
+    pub fn rename_artifact(&self, id: &str, title: &str) -> AppResult<Artifact> {
+        let title = trim_name(title)?;
+        let conn = self.lock()?;
+        let changed = conn.execute(
+            "UPDATE artifacts SET title = ?1 WHERE id = ?2",
+            params![title, id],
+        )?;
+        if changed == 0 {
+            return Err(AppError::Message("Artifact not found.".into()));
+        }
+        drop(conn);
+        self.get_artifact(id)
+    }
+
+    pub fn delete_artifact(&self, id: &str) -> AppResult<()> {
+        let conn = self.lock()?;
+        let changed = conn.execute("DELETE FROM artifacts WHERE id = ?1", params![id])?;
+        if changed == 0 {
+            return Err(AppError::Message("Artifact not found.".into()));
+        }
+        Ok(())
+    }
+
+    pub fn set_artifact_status(
+        &self,
+        id: &str,
+        status: &str,
+        error_message: &str,
+    ) -> AppResult<()> {
+        let conn = self.lock()?;
+        conn.execute(
+            "UPDATE artifacts SET status = ?1, error_message = ?2 WHERE id = ?3",
+            params![status, error_message, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_artifact_transcript(
+        &self,
+        id: &str,
+        transcript: &str,
+        segments_json: &str,
+        duration_ms: i64,
+    ) -> AppResult<()> {
+        let conn = self.lock()?;
+        conn.execute(
+            "UPDATE artifacts
+             SET transcript = ?1, segments_json = ?2, duration_ms = ?3, status = 'ready', error_message = ''
+             WHERE id = ?4",
+            params![transcript, segments_json, duration_ms, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn ready_artifacts_for_scope(
+        &self,
+        scope_type: &str,
+        scope_id: &str,
+    ) -> AppResult<Vec<Artifact>> {
+        let sql = match scope_type {
+            "artifact" => {
+                "SELECT id, meeting_group_id, title, source_type, status, has_audio,
+                        original_filename, error_message, transcript, segments_json, duration_ms, created_at
+                 FROM artifacts WHERE id = ?1 AND status = 'ready'"
+            }
+            "meeting_group" => {
+                "SELECT id, meeting_group_id, title, source_type, status, has_audio,
+                        original_filename, error_message, transcript, segments_json, duration_ms, created_at
+                 FROM artifacts WHERE meeting_group_id = ?1 AND status = 'ready'
+                 ORDER BY created_at DESC"
+            }
+            "topic" => {
+                "SELECT a.id, a.meeting_group_id, a.title, a.source_type, a.status, a.has_audio,
+                        a.original_filename, a.error_message, a.transcript, a.segments_json, a.duration_ms, a.created_at
+                 FROM artifacts a
+                 JOIN meeting_groups g ON g.id = a.meeting_group_id
+                 WHERE g.topic_id = ?1 AND a.status = 'ready'
+                 ORDER BY g.occurred_at DESC, a.created_at DESC"
+            }
+            "organization" => {
+                "SELECT a.id, a.meeting_group_id, a.title, a.source_type, a.status, a.has_audio,
+                        a.original_filename, a.error_message, a.transcript, a.segments_json, a.duration_ms, a.created_at
+                 FROM artifacts a
+                 JOIN meeting_groups g ON g.id = a.meeting_group_id
+                 JOIN topic_categories t ON t.id = g.topic_id
+                 WHERE t.organization_id = ?1 AND a.status = 'ready'
+                 ORDER BY g.occurred_at DESC, a.created_at DESC"
+            }
+            _ => return Err(AppError::Message("Unknown chat scope.".into())),
+        };
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare(sql)?;
+        let rows = stmt
+            .query_map(params![scope_id], map_artifact)?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    pub fn count_artifacts_in_scope(
+        &self,
+        scope_type: &str,
+        scope_id: &str,
+    ) -> AppResult<(i64, i64)> {
+        let ready = self.ready_artifacts_for_scope(scope_type, scope_id)?.len() as i64;
+        let total_sql = match scope_type {
+            "artifact" => "SELECT COUNT(*) FROM artifacts WHERE id = ?1",
+            "meeting_group" => "SELECT COUNT(*) FROM artifacts WHERE meeting_group_id = ?1",
+            "topic" => {
+                "SELECT COUNT(*) FROM artifacts a
+                 JOIN meeting_groups g ON g.id = a.meeting_group_id
+                 WHERE g.topic_id = ?1"
+            }
+            "organization" => {
+                "SELECT COUNT(*) FROM artifacts a
+                 JOIN meeting_groups g ON g.id = a.meeting_group_id
+                 JOIN topic_categories t ON t.id = g.topic_id
+                 WHERE t.organization_id = ?1"
+            }
+            _ => return Err(AppError::Message("Unknown chat scope.".into())),
+        };
+        let conn = self.lock()?;
+        let total: i64 = conn.query_row(total_sql, params![scope_id], |row| row.get(0))?;
+        Ok((ready, total))
+    }
 }
 
 fn name_taken(conn: &Connection, sql: &str, name: &str) -> AppResult<bool> {
@@ -445,6 +645,23 @@ fn get_topic(conn: &Connection, id: &str) -> AppResult<Topic> {
         },
     )
     .map_err(|_| AppError::Message("Topic not found.".into()))
+}
+
+fn map_artifact(row: &rusqlite::Row<'_>) -> rusqlite::Result<Artifact> {
+    Ok(Artifact {
+        id: row.get(0)?,
+        meeting_group_id: row.get(1)?,
+        title: row.get(2)?,
+        source_type: row.get(3)?,
+        status: row.get(4)?,
+        has_audio: row.get::<_, i64>(5)? != 0,
+        original_filename: row.get(6)?,
+        error_message: row.get(7)?,
+        transcript: row.get(8)?,
+        segments_json: row.get(9)?,
+        duration_ms: row.get(10)?,
+        created_at: row.get(11)?,
+    })
 }
 
 fn get_meeting_group(conn: &Connection, id: &str) -> AppResult<MeetingGroup> {

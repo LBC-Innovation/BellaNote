@@ -17,6 +17,13 @@
     "allow-delete-topic",
     "allow-create-meeting-group",
     "allow-rename-meeting-group",
-    "allow-delete-meeting-group"
+    "allow-delete-meeting-group",
+    "allow-list-artifacts",
+    "allow-get-artifact",
+    "allow-import-audio",
+    "allow-import-transcript",
+    "allow-rename-artifact",
+    "allow-delete-artifact",
+    "allow-get-artifact-audio-path"
   ]
 }
