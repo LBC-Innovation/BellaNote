@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-delete-topic"
+description = "Enables the delete_topic command without any pre-configured scope."
+commands.allow = ["delete_topic"]
+
+[[permission]]
+identifier = "deny-delete-topic"
+description = "Denies the delete_topic command without any pre-configured scope."
+commands.deny = ["delete_topic"]

@@ -1,10 +1,22 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
+  "description": "Default permissions for BellaNote",
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "opener:default"
+    "core:event:default",
+    "dialog:default",
+    "opener:default",
+    "allow-get-library",
+    "allow-create-organization",
+    "allow-rename-organization",
+    "allow-delete-organization",
+    "allow-create-topic",
+    "allow-rename-topic",
+    "allow-delete-topic",
+    "allow-create-meeting-group",
+    "allow-rename-meeting-group",
+    "allow-delete-meeting-group"
   ]
 }

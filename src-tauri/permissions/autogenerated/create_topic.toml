@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-create-topic"
+description = "Enables the create_topic command without any pre-configured scope."
+commands.allow = ["create_topic"]
+
+[[permission]]
+identifier = "deny-create-topic"
+description = "Denies the create_topic command without any pre-configured scope."
+commands.deny = ["create_topic"]
