@@ -165,6 +165,11 @@ pub fn get_artifact_audio_path(app: AppHandle, args: IdArgs) -> AppResult<Option
     Ok(artifacts::find_audio_path(&app, &args.id).map(|p| p.to_string_lossy().into_owned()))
 }
 
+#[tauri::command]
+pub fn retry_artifact(app: AppHandle, state: State<'_, Arc<AppState>>, args: IdArgs) -> AppResult<Artifact> {
+    artifacts::retry_artifact(&app, &state, &args.id)
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiKeyArgs {

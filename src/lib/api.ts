@@ -67,6 +67,10 @@ export function deleteArtifact(id: string) {
   return invoke<void>("delete_artifact", { args: { id } });
 }
 
+export function retryArtifact(id: string) {
+  return invoke<Artifact>("retry_artifact", { args: { id } });
+}
+
 export function getArtifactAudioPath(id: string) {
   return invoke<string | null>("get_artifact_audio_path", { args: { id } });
 }

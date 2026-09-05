@@ -14,15 +14,15 @@ const components = {
     <h3 className="mt-2 mb-1 text-sm font-semibold first:mt-0">{children}</h3>
   ),
   p: ({ children }: { children?: ReactNode }) => (
-    <p className="my-1.5 leading-relaxed first:mt-0 last:mb-0">{children}</p>
+    <p className="my-2.5 leading-7 first:mt-0 last:mb-0">{children}</p>
   ),
   ul: ({ children }: { children?: ReactNode }) => (
-    <ul className="my-1.5 list-disc space-y-0.5 pl-4 first:mt-0 last:mb-0">{children}</ul>
+    <ul className="my-2.5 list-disc space-y-1.5 pl-4 first:mt-0 last:mb-0">{children}</ul>
   ),
   ol: ({ children }: { children?: ReactNode }) => (
-    <ol className="my-1.5 list-decimal space-y-0.5 pl-4 first:mt-0 last:mb-0">{children}</ol>
+    <ol className="my-2.5 list-decimal space-y-1.5 pl-4 first:mt-0 last:mb-0">{children}</ol>
   ),
-  li: ({ children }: { children?: ReactNode }) => <li className="leading-relaxed">{children}</li>,
+  li: ({ children }: { children?: ReactNode }) => <li className="leading-7">{children}</li>,
   strong: ({ children }: { children?: ReactNode }) => (
     <strong className="font-semibold text-foreground">{children}</strong>
   ),
@@ -38,7 +38,7 @@ const components = {
     </a>
   ),
   blockquote: ({ children }: { children?: ReactNode }) => (
-    <blockquote className="my-1.5 border-l-2 border-primary/50 pl-3 text-muted-foreground first:mt-0 last:mb-0">
+    <blockquote className="my-2.5 border-l-2 border-primary/50 pl-3 text-muted-foreground first:mt-0 last:mb-0">
       {children}
     </blockquote>
   ),

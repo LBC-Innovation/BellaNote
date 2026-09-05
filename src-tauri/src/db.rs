@@ -508,6 +508,18 @@ impl Db {
         Ok(())
     }
 
+    pub fn fail_interrupted_imports(&self) -> AppResult<usize> {
+        let conn = self.lock()?;
+        let changed = conn.execute(
+            "UPDATE artifacts
+             SET status = 'failed',
+                 error_message = 'Import didn’t finish because BellaNote closed. You can try again.'
+             WHERE status IN ('queued', 'transcribing')",
+            [],
+        )?;
+        Ok(changed)
+    }
+
     pub fn set_artifact_status(
         &self,
         id: &str,

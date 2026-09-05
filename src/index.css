@@ -194,3 +194,33 @@
 @utility title-saved {
   animation: title-saved 900ms ease-out;
 }
+
+.notice-toaster [data-sonner-toast][data-styled="true"] {
+  justify-content: center;
+}
+
+.notice-toaster [data-sonner-toast][data-styled="true"] [data-content] {
+  flex: none;
+  text-align: center;
+}
+
+/* Unlayered so this wins over Tailwind preflight's `button { cursor: default }`. */
+button:not(:disabled),
+button:not(:disabled) *,
+[role="button"]:not([aria-disabled="true"]),
+[role="button"]:not([aria-disabled="true"]) *,
+a[href],
+a[href] *,
+summary,
+select:not(:disabled),
+[aria-haspopup]:not(:disabled),
+[aria-haspopup]:not(:disabled) * {
+  cursor: pointer;
+}
+
+button:disabled,
+button:disabled *,
+[aria-disabled="true"],
+[aria-disabled="true"] * {
+  cursor: not-allowed;
+}

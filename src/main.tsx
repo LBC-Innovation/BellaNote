@@ -10,6 +10,14 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <TooltipProvider>
       <App />
       <Toaster theme="dark" position="bottom-right" />
+      <Toaster
+        theme="dark"
+        id="notice"
+        className="toaster group notice-toaster"
+        position="top-center"
+        offset={{ top: 56 }}
+        richColors
+      />
     </TooltipProvider>
   </React.StrictMode>,
 );

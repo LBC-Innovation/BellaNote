@@ -83,6 +83,26 @@ pub fn import_audio(app: &AppHandle, state: &Arc<AppState>, meeting_group_id: &s
     Ok(artifact)
 }
 
+pub fn retry_artifact(app: &AppHandle, state: &Arc<AppState>, id: &str) -> AppResult<Artifact> {
+    let artifact = state.db.get_artifact(id)?;
+    if artifact.status == "queued" || artifact.status == "transcribing" {
+        return Err(AppError::Message("This file is already importing.".into()));
+    }
+    if artifact.status != "failed" {
+        return Err(AppError::Message("Only failed imports can be retried.".into()));
+    }
+    if !artifact.has_audio {
+        return Err(AppError::Message("This file has no audio to transcribe.".into()));
+    }
+    let path = find_audio_path(app, id).ok_or_else(|| {
+        AppError::Message("The original audio is missing. Remove this file and add it again.".into())
+    })?;
+    state.db.set_artifact_status(id, "queued", "")?;
+    let _ = app.emit("artifact-updated", id);
+    spawn_transcribe(app.clone(), Arc::clone(state), id.to_string(), path);
+    state.db.get_artifact(id)
+}
+
 pub fn import_transcript_file(
     app: &AppHandle,
     state: &Arc<AppState>,
@@ -151,8 +171,6 @@ pub fn find_audio_path(app: &AppHandle, id: &str) -> Option<PathBuf> {
 
 fn spawn_transcribe(app: AppHandle, state: Arc<AppState>, id: String, audio_path: PathBuf) {
     std::thread::spawn(move || {
-        let _ = state.db.set_artifact_status(&id, "transcribing", "");
-        let _ = app.emit("artifact-updated", &id);
         let result = (|| {
             let mut slot = state
                 .transcriber
@@ -161,6 +179,8 @@ fn spawn_transcribe(app: AppHandle, state: Arc<AppState>, id: String, audio_path
             if slot.is_none() {
                 *slot = Some(Transcriber::new()?);
             }
+            let _ = state.db.set_artifact_status(&id, "transcribing", "");
+            let _ = app.emit("artifact-updated", &id);
             slot.as_ref().unwrap().transcribe_path(&audio_path)
         })();
         match result {
@@ -183,10 +203,27 @@ fn spawn_transcribe(app: AppHandle, state: Arc<AppState>, id: String, audio_path
             Err(err) => {
                 let _ = state
                     .db
-                    .set_artifact_status(&id, "failed", &err.to_string());
+                    .set_artifact_status(&id, "failed", &human_fail_message(&err));
             }
         }
         let _ = app.emit("artifact-updated", &id);
     });
+}
+
+fn human_fail_message(err: &anyhow::Error) -> String {
+    let text = err.to_string();
+    let lower = text.to_lowercase();
+    if lower.contains("spawn")
+        || lower.contains("venv")
+        || lower.contains("worker not found")
+        || lower.contains("echo_python")
+    {
+        return "Transcription isn’t available on this Mac. You can try again.".into();
+    }
+    if lower.contains("no such file") || lower.contains("couldn’t read") || lower.contains("could not")
+    {
+        return "BellaNote couldn’t read this audio file.".into();
+    }
+    "This file couldn’t be processed. You can try again.".into()
 }
 

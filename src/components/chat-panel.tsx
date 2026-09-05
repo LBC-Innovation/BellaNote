@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, MessageCircle, Send } from "lucide-react";
+import { Loader2, MessageCircle, PanelRightClose, Send } from "lucide-react";
 import { toast } from "sonner";
 import { ChatMarkdown } from "@/components/chat-markdown";
+import { CollapsedRail } from "@/components/collapsed-rail";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,7 +41,7 @@ function formatChatTime(value?: string) {
 function MessageMeta({ name, at }: { name: string; at?: string }) {
   const stamp = formatChatTime(at);
   return (
-    <p className="mb-1 flex items-baseline gap-2">
+    <p className="mb-2 flex items-baseline gap-2">
       <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{name}</span>
       {stamp ? (
         <time dateTime={at} className="text-[10px] tabular-nums text-muted-foreground/80">
@@ -53,7 +54,7 @@ function MessageMeta({ name, at }: { name: string; at?: string }) {
 
 function ThinkingBubble({ at }: { at: string }) {
   return (
-    <div className="thinking-bubble rounded-2xl bg-black/20 px-3 py-2">
+    <div className="thinking-bubble rounded-2xl bg-black/20 px-4 py-3.5">
       <MessageMeta name="BellaNote" at={at} />
       <div className="flex items-center gap-2 py-1" aria-live="polite" aria-label="BellaNote is thinking">
         <span className="flex items-center gap-1">
@@ -67,7 +68,17 @@ function ThinkingBubble({ at }: { at: string }) {
   );
 }
 
-export function ChatPanel({ keyConfigured, onNeedKey }: { keyConfigured: boolean; onNeedKey: () => void }) {
+export function ChatPanel({
+  collapsed,
+  onCollapsedChange,
+  keyConfigured,
+  onNeedKey,
+}: {
+  collapsed: boolean;
+  onCollapsedChange: (collapsed: boolean) => void;
+  keyConfigured: boolean;
+  onNeedKey: () => void;
+}) {
   const orgs = useLibraryStore((s) => s.orgs);
   const selection = useLibraryStore((s) => s.selection);
   const artifactId = useArtifactStore((s) => s.activeId);
@@ -142,10 +153,32 @@ export function ChatPanel({ keyConfigured, onNeedKey }: { keyConfigured: boolean
     }
   }
 
+  if (collapsed) {
+    return (
+      <div className="flex h-full min-h-0 min-w-0 flex-col">
+        <CollapsedRail
+          label="Chat"
+          expandLabel="Expand chat"
+          onExpand={() => onCollapsedChange(false)}
+          icon={<MessageCircle className="size-4" />}
+        />
+      </div>
+    );
+  }
+
   return (
-    <section className="glass-panel flex min-h-0 flex-col rounded-3xl p-4">
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
+    <section className="glass-panel flex min-h-0 flex-1 flex-col rounded-3xl p-4">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Collapse chat"
+            onClick={() => onCollapsedChange(true)}
+          >
+            <PanelRightClose />
+          </Button>
           <MessageCircle className="size-4 text-primary" />
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             Chat
@@ -206,12 +239,12 @@ export function ChatPanel({ keyConfigured, onNeedKey }: { keyConfigured: boolean
       )}
 
       <ScrollArea className="mt-3 min-h-0 flex-1">
-        <div className="flex flex-col gap-3 pr-2">
+        <div className="flex flex-col gap-4 pr-2">
           {messages.map((message, index) => (
             <div
               key={`${message.role}-${message.createdAt ?? index}`}
               className={cn(
-                "rounded-2xl px-3 py-2 text-sm leading-relaxed",
+                "rounded-2xl px-4 py-3.5 text-sm leading-7",
                 message.role === "user" ? "bg-primary/10" : "bg-black/20",
               )}
             >
@@ -255,5 +288,6 @@ export function ChatPanel({ keyConfigured, onNeedKey }: { keyConfigured: boolean
         </Button>
       </div>
     </section>
+    </div>
   );
 }

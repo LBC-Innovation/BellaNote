@@ -1,10 +1,12 @@
 # BellaNote — Business Logic, Value Scope & Product Requirements
 
-**Document status:** Working draft for platform requirements  
+**Document status:** Working draft for platform requirements — first Mac slice implemented  
 **Audience:** Founder, product, and engineering  
 **Date:** 5 September 2026  
+**Last implementation review:** 5 September 2026  
 **Repo:** [LBC-Innovation/BellaNote](https://github.com/LBC-Innovation/BellaNote)  
-**Inputs:** Founder brief, existing BellaNote2 POC (`~/Documents/_DEV/_PERSONAL/BellaNote2`), [Granola](https://www.granola.ai/), and the 2026 AI meeting-notes category
+**Inputs:** Founder brief, existing BellaNote2 POC (`~/Documents/_DEV/_PERSONAL/BellaNote2`), [Granola](https://www.granola.ai/), and the 2026 AI meeting-notes category  
+**First-slice stories:** [`USER_STORIES.md`](./USER_STORIES.md)
 
 ---
 
@@ -50,6 +52,21 @@ A beautiful Mac and Windows desktop app where a person can capture or import a c
 ### What success looks like
 
 A user finishes a town hall, a 1:1, or a planning session, closes their laptop lid on the *meeting*, and opens BellaNote afterward — not during — to understand what was important, who owns what, and what to do next. They were in the conversation. BellaNote was in the background.
+
+### What this repo has shipped (first Mac slice)
+
+The greenfield app is **Mac-only and files-only**. It does not yet include live capture, Windows, summaries, or tasks. It does prove the Duke walkthrough:
+
+- Strict tree: **Organization → Topic category → Meeting group → Artifacts** (a refinement of §6.3’s optional-tag meeting model; unfiled org/topic remains the long-term product, not this slice)
+- Import audio (`wav` / `mp3` / `m4a` / `aac` / `ogg` / `flac`) → copy into Application Support → one-shot on-device `small.en`
+- Extra audio uploads wait as **Pending**; only the job that holds the whisper worker shows **Importing**
+- Import `.vtt` / `.srt` / `.txt` as ready transcripts (no audio required)
+- Static waveform, click-to-seek, and Follow-highlight on audio artifacts
+- Scoped `gpt-4o` chat at org / topic / meeting group / this file, with a ready-count preview and a ~110k character budget
+- OpenAI token in the macOS keychain
+- Three-pane charcoal / mint glass shell (Library | Transcript | Chat), with collapsible rails
+
+Story-level status lives in [`USER_STORIES.md`](./USER_STORIES.md).
 
 ---
 
@@ -107,12 +124,16 @@ Treat the following as **inherited product truth**, not a rewrite.
 
 **POC gaps that the new product must close**
 
+The greenfield first slice closed the starred items for Mac files. The rest remain.
+
 - macOS only (no Windows capture path)
-- No YouTube ingest, no local audio-file ingest
-- No attendees, purpose, organization, or topic category
-- Discovery chat is single-meeting only
+- No YouTube ingest
+- ★ Local audio-file ingest (shipped)
+- ★ Organization, topic category, and meeting group (shipped as a required tree, not optional tags)
+- No attendees or purpose fields
+- ★ Chat across org / topic / group / one file (shipped; BellaNote2 Discovery was single-meeting)
 - Tasks are not derived from the conversation
-- Summaries are one generic executive voice, not audience/meeting-type aware
+- Summaries are not in this slice
 - No calendar, no speaker labels, no sharing
 
 ---
@@ -214,35 +235,35 @@ Origin: **Brief** = founder request. **POC** = already proven. **Granola** = cat
 | C1 | Microphone recording | Capture a voice memo / in-person conversation from the device mic | MVP | P0 | Brief, POC | Existing `voice` mode. |
 | C2 | System + microphone capture | Capture meeting playback *and* the user’s voice, no bot | MVP | P0 | Brief, POC, Granola | macOS: ScreenCaptureKit. Windows: WASAPI loopback + mic mix. Hardest Windows work. |
 | C3 | YouTube URL ingest | User pastes a YouTube link; app fetches audio and transcribes locally | MVP | P0 | Brief | Personal-use helper. Must show ToS/copyright notice. Fail gracefully on restricted videos. |
-| C4 | Local audio file ingest | User picks wav/mp3/m4a/ogg/etc.; transcribe locally | MVP | P0 | Brief, Market | Missing from POC. Reuse the whisper worker. |
-| C5 | Import third-party transcript | Ingest VTT/SRT/TXT/DOCX from Teams, Zoom, Otter, etc.; audio optional | MVP | P0 | Brief, POC | POC has VTT only. Trust the file; do not require audio. |
+| C4 | Local audio file ingest | User picks wav/mp3/m4a/ogg/etc.; transcribe locally | MVP | P0 | Brief, Market | **First slice:** one file per picker; `small.en` one-shot; extra files queue as Pending. Video rejected. |
+| C5 | Import third-party transcript | Ingest VTT/SRT/TXT/DOCX from Teams, Zoom, Otter, etc.; audio optional | MVP | P0 | Brief, POC | **First slice:** `.vtt` / `.srt` / `.txt` only (2 MB cap). No DOCX. |
 | C6 | Re-transcribe | Re-run local model on kept audio (better model, or after edit) | Near-term | P1 | POC | POC already has regenerate. Keep it. |
 | C7 | Live transcript (ignorable) | Segments appear while recording; user is not required to watch | MVP | P0 | POC, Otter | Calm, low-contrast during capture. |
-| C8 | Local audio retention + playback | Keep audio on disk; waveform; click transcript to seek | MVP | P0 | POC, Diff | Opposite of Granola’s delete-audio default. Archive may drop audio (POC behavior). |
-| C9 | Transcript quality display | Show low-confidence segments; optional filter before LLM use | MVP | P0 | POC, Diff | Already a technical edge. Surface it simply. |
-| M1 | Meeting title | Editable name; default from time or first words | MVP | P0 | Brief, POC | POC has inline rename. |
+| C8 | Local audio retention + playback | Keep audio on disk; waveform; click transcript to seek | MVP | P0 | POC, Diff | **First slice:** static full-width tape, playhead, click-to-seek, Follow highlight. No archive yet. |
+| C9 | Transcript quality display | Show low-confidence segments; optional filter before LLM use | MVP | P0 | POC, Diff | **First slice:** Files table shows model / Imported / Importing / Pending / Failed — not per-segment confidence. |
+| M1 | Meeting title | Editable name; default from time or first words | MVP | P0 | Brief, POC | **First slice:** meeting-group name + artifact title (inline rename). |
 | M2 | Attendees | Free-form people list; optional later contact pick | MVP | P0 | Brief | Not in POC. No directory required in MVP. |
 | M3 | Meeting purpose | Short “why we met” field | MVP | P0 | Brief | Manual; AI may suggest after transcript exists. |
 | M4 | Meeting type | Town hall, planning, 1:1, general, custom | MVP | P0 | Brief, Granola | Drives summary template. |
-| M5 | Date and time | Always set; defaults to capture start; user-editable | MVP | P0 | Brief | Required. Used for library grouping. |
-| M6 | Organization (optional) | User-defined org / client / company; not required | MVP | P0 | Brief | Independent of topic. |
-| M7 | Topic category (optional) | User-defined topic; not required; independent of org | MVP | P0 | Brief | Same meeting may have org, topic, both, or neither. |
-| M8 | Library by date | Today / yesterday / older, as in the POC | MVP | P0 | POC | Default view. |
+| M5 | Date and time | Always set; defaults to capture start; user-editable | MVP | P0 | Brief | **First slice:** meeting group `occurred_at` defaults to now and is shown, not edited. Artifact “date added” is `created_at`. |
+| M6 | Organization (optional) | User-defined org / client / company; not required | MVP | P0 | Brief | **First slice:** required top-level container. Long-term: optional / independent of topic. |
+| M7 | Topic category (optional) | User-defined topic; not required; independent of org | MVP | P0 | Brief | **First slice:** required under an org. Long-term: optional / independent of org. |
+| M8 | Library by date | Today / yesterday / older, as in the POC | MVP | P0 | POC | **First slice:** tree library, not date buckets. Meeting groups still store `occurred_at`. |
 | M9 | Filter / browse by org or topic | Narrow the library without forcing a tree | MVP | P0 | Brief | Hierarchy is a *view*, not a prison. Empty org/topic is valid. |
 | M10 | Archive | Remove from active list; optionally drop audio | MVP | P0 | POC | Keep. |
 | M11 | Full-text search | Search titles, transcript, notes, attendees | Near-term | P1 | Market | Users will ask for this immediately after MVP. |
 | A1 | Audience-aware summary | Summary shaped by meeting type and chosen audience | MVP | P0 | Brief, POC | Evolve the existing executive-summary prompt into templates. |
 | A2 | Enhance optional notes | If the user jotted anything, expand it from the transcript | MVP | P0 | POC, Granola | Keep the “your words vs AI words” distinction. |
 | A3 | Assigned-task extraction | Propose owner + task + due date when spoken; user confirms | MVP | P0 | Brief, Market | Write into the tasks rail. Never silent-create. |
-| A4 | Chat with this meeting | Request/response Q&A grounded in the transcript, with time cites | MVP | P0 | Brief, POC | Existing Discovery chat. Click cite → seek. |
-| A5 | Chat across related meetings | If org and/or topic is set, retrieve sibling meetings as extra context | Near-term | P1 | Brief, Granola | The example in the brief (“new customer onboarding in September”) needs this. |
+| A4 | Chat with this meeting | Request/response Q&A grounded in the transcript, with time cites | MVP | P0 | Brief, POC | **First slice:** This-file scope + markdown answers. Model cites `[00:17]` in prose; click-to-seek from a cite is not built. |
+| A5 | Chat across related meetings | If org and/or topic is set, retrieve sibling meetings as extra context | Near-term | P1 | Brief, Granola | **First slice pulled this forward:** Org / Topic / Group scopes with a character budget and omitted-count preview. |
 | A6 | Follow-up email draft | One-click draft recap + asks, copy or mailto | Near-term | P1 | Granola, Market | High perceived value, low build cost after A1. |
 | A7 | Decision log | Extract “we decided X” as a first-class list | Near-term | P1 | Diff, Market | Complements tasks. Town halls and planning sessions especially. |
 | A8 | Custom / saved prompts (“Recipes”) | User-saved post-meeting actions (PRD, coaching note, standup recap) | Near-term | P1 | Granola, Tactiq | POC already has editable system prompts; productize as recipes. |
-| A9 | User-owned LLM | BYO key, provider + model picker, keychain storage | MVP | P0 | POC, Diff | Privacy story: BellaNote does not broker the user’s AI account in MVP. |
-| A10 | Offline-safe core | Record and transcribe offline; AI disabled with a clear explanation | MVP | P0 | POC | Keep the existing offline modal behavior. |
+| A9 | User-owned LLM | BYO key, provider + model picker, keychain storage | MVP | P0 | POC, Diff | **First slice:** OpenAI token in keychain, `gpt-4o` only. No Anthropic / model picker yet. |
+| A10 | Offline-safe core | Record and transcribe offline; AI disabled with a clear explanation | MVP | P0 | POC | **First slice:** transcribe works offline; chat needs the network and says so. No record path yet. |
 | X1 | Copy / export transcript and notes | Markdown, plain text, VTT | MVP | P0 | POC, Market | POC exports timestamped text. Add markdown notes. |
-| X2 | Light / dark theme | Ship both; dark default | MVP | P0 | POC | Brand continuity. |
+| X2 | Light / dark theme | Ship both; dark default | MVP | P0 | POC | **First slice:** dark charcoal / mint glass only. |
 | X3 | Recording consent reminder | Soft banner: you are capturing audio; know your jurisdiction | MVP | P0 | Jamie, Market | Trust. Not a legal product. |
 | X4 | Calendar detect (optional) | Suggest title, attendees, time from Google or Outlook | Near-term | P1 | Granola, Market | Must work with *no* calendar. Do not block MVP on this. |
 | X5 | Speaker labels | Manual rename of Speaker 1/2; later voice memory | Near-term | P1 | Jamie, Market | Auto-diarization is imperfect; ship manual first. |
@@ -266,6 +287,14 @@ Origin: **Brief** = founder request. **POC** = already proven. **Granola** = cat
 
 **Out of MVP on purpose:** calendar, speaker memory, YouTube-at-scale robustness, backend sharing, handwriting, MCP, CRM, video, mobile.
 
+### First-slice ship status (this repo, Mac)
+
+Pulled forward from the later table: **A5** (scoped chat across org / topic / group) shipped in the files-only slice.
+
+| Shipped | Partial | Not in this slice |
+|---|---|---|
+| C4, C5 (vtt/srt/txt), C8, A4, A5, A9, A10 (transcribe offline), M1, M5–M7 (as a required tree), X2 (dark only) | C9 (model/status badge, not segment confidence), A4 cite-to-seek, A5 file-list preview | C1–C3, C6–C7, M2–M4, M8–M11, A1–A3, A6–A8, A10 offline-record modal, X1, X3–X6, all B/F |
+
 ---
 
 ## 6. Product scope (for platform requirements)
@@ -274,15 +303,17 @@ This section is the contract for the first requirements and architecture pass.
 
 ### 6.1 Product shape
 
-- **Form factor:** Native desktop app for **macOS 13+** and **Windows 11**.
-- **Stack direction (recommended):** Continue **Tauri 2 + Rust + React + TypeScript**. The POC already paid the tax on capture, bundling Whisper, keychain, and a dense desktop UI. Electron would fight the “efficient on both platforms” goal.
-- **Local data:** SQLite + audio files in a user-chosen recordings directory.
+- **Form factor:** Native desktop app for **macOS 13+** and **Windows 11**. **First slice ships Mac only.**
+- **Stack direction (recommended):** Continue **Tauri 2 + Rust + React + TypeScript**. The first slice and BellaNote2 already paid the tax on Whisper, keychain, and a dense desktop UI. Electron would fight the “efficient on both platforms” goal.
+- **Local data:** SQLite + files under Application Support (`com.bellanote.app`). A user-chosen recordings directory is later.
 - **AI:** Optional, user-configured. No AI vendor account required to record or transcribe.
 - **Network:** Required only for LLM calls, YouTube ingest, and (later) sharing.
 
 ### 6.2 Capture and ingest
 
-Every meeting is created the same way: **New meeting** (or “drop something on a meeting”). Then the user chooses an ingest path.
+**First slice (shipped):** there is no “New meeting.” The user creates **Org → Topic → Meeting group**, then **Import Meeting** (audio file or transcript file) into that group. Multiple artifacts live in one group.
+
+**Target product:** every meeting is created the same way: **New meeting** (or “drop something on a meeting”). Then the user chooses an ingest path.
 
 ```
                     ┌─ Microphone only
@@ -311,7 +342,9 @@ New meeting ────────┼─ YouTube URL
 
 ### 6.3 Meeting model
 
-A meeting is the atomic object.
+**First slice (shipped):** the atomic user object is a **meeting group** that holds many **artifacts**. Required path: Organization → Topic → Meeting group → Artifact. Duplicate org/topic names in the same parent are blocked; meeting-group names may repeat. Date (`occurred_at`) is stored and shown, not edited.
+
+**Target product:** a meeting is the atomic object. Organization and topic become optional independent tags again (see hierarchy rules below). The first-slice meeting group should map forward as “a meeting that can have many artifacts.”
 
 | Field | Required | Default | Notes |
 |---|---|---|---|
@@ -330,26 +363,30 @@ A meeting is the atomic object.
 | `has_audio` | yes | | |
 | `is_archived` | yes | false | |
 
-**Hierarchy rules (founder constraint)**
+**Hierarchy rules (founder constraint — target product)**
 
 - Date/time is always present.
 - Organization and topic are **independent**. Valid states: neither, org only, topic only, both.
 - The UI may *display* as Org → Topic → Date, but the data model must not require a parent.
 - Deleting an org or topic unassigns meetings; it does not delete them.
 
+**First-slice difference:** the tree is required, and delete cascades (org → topics → groups → artifacts). Unassign-instead-of-delete is the later model.
+
 ### 6.4 Workspace UX
 
-Preserve the POC’s three-region mental model, simplified:
+**First slice (shipped):** three panes — **Library** (strict tree, collapsible rail) · **Transcript** (meeting-group Files table + Transcript/playback cards, collapsible rail) · **Chat** (first-class pane). Settings is a header dialog. Dark charcoal / mint glass. No tasks rail, notes tab, or summary tab.
 
-1. **Library** — meetings by date, with optional org/topic chips and filters. New meeting at the top. Settings reachable but not loud.
+Preserve that three-region mental model as the product grows, simplified from BellaNote2:
+
+1. **Library** — eventually meetings by date, with optional org/topic chips and filters. New meeting at the top. Settings reachable but not loud.
 2. **Workspace** — title, tags, capture/ingest controls, waveform/playback, tabs: **Notes · Transcript · Summary · Chat**.
 3. **Tasks** — persistent rail, collapsed to a thin tab. Mix of manual and confirmed-AI tasks. Link back to the source meeting.
 
 **During recording:** large stop control, duration, input label, quiet live transcript. No modal AI.
 
-**Empty states:** a new meeting should feel inviting (“Record, paste a YouTube link, or drop a file”) rather than like a blank IDE.
+**Empty states:** a new meeting should feel inviting (“Record, paste a YouTube link, or drop a file”) rather than like a blank IDE. First slice already teaches the tree: organization → topic → meeting group → files.
 
-**Design bar:** ship the mint-pulse visual system. Motion is restrained (the POC’s fade/shimmer language). Density is desktop-class, not a blown-up phone web app. Minimum window ~1280×800, as today.
+**Design bar:** ship the mint-pulse visual system. Motion is restrained. Density is desktop-class, not a blown-up phone web app. First-slice window is 1320×860 (min 1024×680).
 
 ### 6.5 AI tools
 
@@ -374,8 +411,8 @@ Only if notes exist. Rewrite *from the user’s jots*, grounded in the transcrip
 Model returns structured proposals: `{text, owner?, due?, evidence_timestamp?}`. User accepts, edits, or discards. Accepted items land in the tasks rail and remain editable.
 
 **Chat (A4, later A5)**  
-Single-meeting RAG over the transcript with timestamp citations that seek the audio when present. Refusal when the transcript does not contain the answer.  
-When A5 lands: retrieve top related meetings by org and/or topic and date window; cite *which meeting* an answer came from.
+**First slice:** scoped RAG over Ready transcripts at org / topic / meeting group / this file. Newest groups first, ~110k character budget, omitted-count preview. The model is told to cite a discrete timestamp and artifact title. Click-cite-to-seek is not built. Refusal when the transcript does not contain the answer.  
+When A5 is finished to spec: expandable file list, clickable citations that open the artifact and seek, and (later) a date-window retrieve that cites *which meeting* an answer came from.
 
 **Guardrails**
 
@@ -391,7 +428,7 @@ These are the “other powerful tools” from the brief, ranked by customer valu
 |---|---|---|
 | Audience-aware summaries | Same meeting, different readers | MVP |
 | Confirmed task extraction | Turns talk into work | MVP |
-| Related-meeting chat | The September onboarding question | P1 |
+| Related-meeting chat | The September onboarding question | P1 (scope chips shipped in first slice) |
 | Decision log | Stops “wait, did we decide that?” | P1 |
 | Follow-up email | Closes the meeting | P1 |
 | Transcript confidence + re-transcribe | Trust in the source of truth | MVP / P1 |
@@ -460,12 +497,12 @@ Requirements work for P3 should not distort MVP schema beyond: **a meeting can h
 ### Phase 0 — Foundations (this repo)
 
 - Product scope (this document) agreed
-- App shell, design tokens, local schema including optional org/topic
-- Shared capture interface with macOS and Windows backends
+- **Done in the first slice:** app shell, design tokens, local schema for org / topic / meeting group / artifact, Mac file ingest, scoped chat
+- Shared capture interface with macOS and Windows backends — **not started**
 
 ### Phase 1 — MVP desktop
 
-- All P0 rows in the feature table
+- Remaining P0 rows in the feature table (live capture, Windows, summaries, tasks, attendees, export, consent)
 - A person can go from zero to “I understand yesterday’s planning session” on both platforms without an account
 
 ### Phase 2 — Memory
@@ -512,9 +549,11 @@ Qualitative first. We will not have SaaS dashboards on day one.
 
 ## 10. How to use this document next
 
-1. Turn Section 5 (P0 rows) into the first requirements backlog / work items.
-2. Write a short **platform architecture** note: capture trait, transcription worker, SQLite schema, LLM boundary.
+The first Mac files slice is in the repo. Story-level leftovers are listed at the bottom of [`USER_STORIES.md`](./USER_STORIES.md).
+
+1. Treat remaining Section 5 P0 rows (capture, Windows, summaries, tasks, attendees, export, consent) as the next requirements backlog.
+2. Keep the first-slice schema (meeting group + artifacts) when live capture lands — a recording is another artifact in a group.
 3. Spike **Windows system audio** before investing in net-new UI.
-4. Port, do not clone-and-forget, the POC modules that already work: capture, whisper worker, quality filter, enhance-notes, Discovery chat, theme.
+4. Port remaining BellaNote2 modules only where this slice did not already replace them: capture, enhance-notes, quality filter, archive.
 
 BellaNote succeeds if the note is beautiful *and* the person who made it was actually in the meeting.

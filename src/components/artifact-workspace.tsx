@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
-import { Check, FileAudio, FileText, Link2, Link2Off, Loader2, Pause, Pencil, Play, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, FileAudio, FileText, FileUp, Link2, Link2Off, ListChecks, Loader2, Pause, Pencil, Play, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { ImportDropDialog } from "@/components/import-drop-dialog";
 import { StaticWaveform } from "@/components/static-waveform";
 import { WorkspaceCard } from "@/components/workspace-card";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import * as api from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
-import { formatAddedDate, transcriptionQuality, type QualityKind } from "@/lib/quality";
+import { formatAddedDate, isFailedArtifact, isImportingArtifact, isLoadableArtifact, isPendingArtifact, transcriptionQuality, type QualityKind } from "@/lib/quality";
 import { formatTimestamp, parseSegments } from "@/lib/segments";
 import { cn } from "@/lib/utils";
 import { useArtifactStore } from "@/store/useArtifactStore";
@@ -40,9 +40,36 @@ async function peaksFromUrl(url: string): Promise<number[]> {
   return peaks.map((value) => value / peak);
 }
 
+function hasTranscriptContent(artifact: Artifact) {
+  return artifact.status === "ready" && Boolean(artifact.transcript.trim());
+}
+
+function ArtifactKindChips({ artifact }: { artifact: Artifact }) {
+  const audio = artifact.hasAudio;
+  const transcript = hasTranscriptContent(artifact);
+  if (!audio && !transcript) return null;
+  return (
+    <>
+      {audio ? (
+        <Badge variant="secondary" className="capitalize">
+          <FileAudio />
+          Audio
+        </Badge>
+      ) : null}
+      {transcript ? (
+        <Badge variant="secondary" className="capitalize">
+          <FileText />
+          Transcript
+        </Badge>
+      ) : null}
+    </>
+  );
+}
+
 function qualityBadge(kind: QualityKind) {
   if (kind === "failed") return "destructive" as const;
   if (kind === "small" || kind === "medium" || kind === "large") return "default" as const;
+  if (kind === "pending") return "outline" as const;
   return "secondary" as const;
 }
 
@@ -59,6 +86,77 @@ function activeSegmentIndex(segments: { start_ms: number; end_ms: number }[], ti
   return last;
 }
 
+function ImportMeetingControl({ onPick }: { onPick: (kind: "audio" | "transcript") => void }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: PointerEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative w-48 shrink-0">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        onClick={() => setOpen((value) => !value)}
+        className={cn(
+          "flex h-8 w-full cursor-pointer items-center gap-1.5 border border-white/20 bg-white/[0.06] px-2.5 text-[0.8rem] font-medium backdrop-blur-md transition-colors hover:bg-white/10",
+          open ? "rounded-t-xl rounded-b-none border-b-transparent" : "rounded-xl",
+        )}
+      >
+        <FileUp className="size-3.5 shrink-0" />
+        <span className="min-w-0 flex-1 text-left">Import Meeting</span>
+        {open ? <ChevronDown className="size-3.5 shrink-0" /> : <ChevronLeft className="size-3.5 shrink-0" />}
+      </button>
+      {open ? (
+        <div
+          role="listbox"
+          className="absolute top-full left-0 z-30 w-full rounded-b-xl border border-t-0 border-white/20 bg-white/[0.06] p-1 backdrop-blur-md"
+        >
+          <button
+            type="button"
+            role="option"
+            className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-white/8"
+            onClick={() => {
+              setOpen(false);
+              onPick("audio");
+            }}
+          >
+            <FileAudio className="size-4 shrink-0" />
+            Audio files
+          </button>
+          <button
+            type="button"
+            role="option"
+            className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-white/8"
+            onClick={() => {
+              setOpen(false);
+              onPick("transcript");
+            }}
+          >
+            <FileText className="size-4 shrink-0" />
+            Transcript files
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; groupName: string }) {
   const artifacts = useArtifactStore((s) => s.artifacts);
   const activeId = useArtifactStore((s) => s.activeId);
@@ -66,30 +164,36 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
   const load = useArtifactStore((s) => s.load);
   const active = artifacts.find((item) => item.id === activeId) ?? null;
   const [remove, setRemove] = useState<Artifact | null>(null);
+  const [removeMany, setRemoveMany] = useState(false);
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filesOpen, setFilesOpen] = useState(true);
   const [detailOpen, setDetailOpen] = useState(true);
+  const [importKind, setImportKind] = useState<"audio" | "transcript" | null>(null);
+
+  function showImportWait() {
+    toast.warning("Please wait, this file is importing", {
+      id: "file-importing",
+      toasterId: "notice",
+      duration: 3500,
+      richColors: true,
+    });
+  }
 
   useEffect(() => {
+    setSelecting(false);
+    setSelectedIds([]);
+    setRemoveMany(false);
     void load(groupId);
   }, [groupId, load]);
 
-  async function pick(kind: "audio" | "transcript") {
-    try {
-      const selected = await open({
-        multiple: false,
-        filters:
-          kind === "audio"
-            ? [{ name: "Audio", extensions: ["wav", "mp3", "m4a", "aac", "ogg", "flac"] }]
-            : [{ name: "Transcript", extensions: ["vtt", "srt", "txt"] }],
-      });
-      if (!selected || Array.isArray(selected)) return;
-      if (kind === "audio") await api.importAudio(groupId, selected);
-      else await api.importTranscript(groupId, selected);
-      await load(groupId);
-    } catch (err) {
-      toast.error(errorMessage(err));
-    }
-  }
+  useEffect(() => {
+    const valid = new Set(artifacts.map((item) => item.id));
+    setSelectedIds((current) => {
+      const next = current.filter((id) => valid.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [artifacts]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -98,34 +202,76 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
           <h1 className="text-xl font-semibold tracking-tight">{groupName}</h1>
           <p className="text-sm text-muted-foreground">Audio and imported transcripts for this meeting group.</p>
         </div>
-        <div className="flex gap-2">
-          <Button size="sm" variant="secondary" onClick={() => void pick("transcript")}>
-            <FileText />
-            Transcript
-          </Button>
-          <Button size="sm" onClick={() => void pick("audio")}>
-            <FileAudio />
-            Audio
-          </Button>
-        </div>
+        <ImportMeetingControl onPick={setImportKind} />
       </div>
 
       <div className="mt-4 flex min-h-0 flex-1 flex-col gap-3">
         <WorkspaceCard
           open={filesOpen}
-          onOpenChange={setFilesOpen}
+          onOpenChange={(open) => {
+            setFilesOpen(open);
+            if (!open) {
+              setSelecting(false);
+              setSelectedIds([]);
+            }
+          }}
           title="Files"
           meta={artifacts.length === 1 ? "1 file" : `${artifacts.length} files`}
+          actions={
+            filesOpen && artifacts.length > 0 ? (
+              <>
+                <Button
+                  size="xs"
+                  variant={selecting ? "secondary" : "ghost"}
+                  aria-pressed={selecting}
+                  onClick={() => {
+                    setSelecting((value) => !value);
+                    setSelectedIds([]);
+                  }}
+                >
+                  <ListChecks />
+                  Select multiple
+                </Button>
+                {selecting ? (
+                  <Button
+                    size="xs"
+                    variant="destructive"
+                    disabled={selectedIds.length === 0}
+                    onClick={() => setRemoveMany(true)}
+                  >
+                    <Trash2 />
+                    Delete
+                  </Button>
+                ) : null}
+              </>
+            ) : null
+          }
         >
           <FilesTable
             artifacts={artifacts}
             activeId={activeId}
+            selecting={selecting}
+            selectedIds={selectedIds}
+            onToggleSelected={(id) => {
+              setSelectedIds((current) =>
+                current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+              );
+            }}
             onSelect={setActive}
             onRename={async (id, name) => {
               await api.renameArtifact(id, name);
               await load(groupId);
             }}
+            onRetry={async (id) => {
+              try {
+                await api.retryArtifact(id);
+                await load(groupId);
+              } catch (err) {
+                toast.error(errorMessage(err));
+              }
+            }}
             onDelete={setRemove}
+            onImportingClick={showImportWait}
           />
         </WorkspaceCard>
 
@@ -133,15 +279,9 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
           open={detailOpen}
           onOpenChange={setDetailOpen}
           title={active?.title ?? "Transcript"}
-          meta={
-            active
-              ? active.hasAudio
-                ? "Audio + transcript"
-                : "Imported transcript"
-              : undefined
-          }
+          meta={active ? <ArtifactKindChips artifact={active} /> : undefined}
         >
-          {active ? (
+          {active && isLoadableArtifact(active) ? (
             <ArtifactDetail artifact={active} />
           ) : (
             <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">
@@ -151,6 +291,16 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
           )}
         </WorkspaceCard>
       </div>
+
+      <ImportDropDialog
+        open={importKind !== null}
+        kind={importKind}
+        groupId={groupId}
+        onOpenChange={(next) => {
+          if (!next) setImportKind(null);
+        }}
+        onImported={() => load(groupId)}
+      />
 
       <ConfirmDialog
         open={Boolean(remove)}
@@ -166,22 +316,87 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
           await load(groupId);
         }}
       />
+
+      <ConfirmDialog
+        open={removeMany}
+        title={`Are you sure you want to delete ${selectedIds.length} ${selectedIds.length === 1 ? "file" : "files"}?`}
+        description="This removes the files from BellaNote. The originals on disk are left alone."
+        confirmLabel="Delete"
+        onOpenChange={setRemoveMany}
+        onConfirm={async () => {
+          const ids = selectedIds;
+          try {
+            for (const id of ids) {
+              await api.deleteArtifact(id);
+            }
+            setSelectedIds([]);
+            setSelecting(false);
+            await load(groupId);
+          } catch (err) {
+            toast.error(errorMessage(err));
+            await load(groupId);
+          }
+        }}
+      />
     </div>
+  );
+}
+
+const filesGridClass = "grid-cols-[minmax(0,1fr)_auto_auto_auto]";
+
+function FileCheckbox({
+  checked,
+  label,
+  onToggle,
+}: {
+  checked: boolean;
+  label: string;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={(event) => {
+        event.stopPropagation();
+        onToggle();
+      }}
+      className={cn(
+        "flex size-4 items-center justify-center rounded-[5px] border transition-colors",
+        checked
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-white/25 bg-white/[0.06] hover:border-primary/45 hover:bg-white/10",
+      )}
+    >
+      {checked ? <Check className="size-2.5" strokeWidth={3} /> : null}
+    </button>
   );
 }
 
 function FilesTable({
   artifacts,
   activeId,
+  selecting,
+  selectedIds,
+  onToggleSelected,
   onSelect,
   onRename,
+  onRetry,
   onDelete,
+  onImportingClick,
 }: {
   artifacts: Artifact[];
   activeId: string | null;
+  selecting: boolean;
+  selectedIds: string[];
+  onToggleSelected: (id: string) => void;
   onSelect: (id: string) => void;
   onRename: (id: string, name: string) => Promise<void>;
+  onRetry: (id: string) => Promise<void>;
   onDelete: (artifact: Artifact) => void;
+  onImportingClick: () => void;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
@@ -197,22 +412,30 @@ function FilesTable({
   return (
     <ScrollArea className="min-h-0 flex-1">
       <div className="flex flex-col gap-1 pr-1">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-4 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <div
+          className={cn(
+            "grid items-center gap-x-4 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground",
+            filesGridClass,
+          )}
+        >
           <span>File</span>
           <span className="w-[7.25rem]">Added</span>
-          <span className="w-[6.75rem]">Quality</span>
+          <span className="w-[10rem]">Quality</span>
           <span className="w-14" />
         </div>
         {artifacts.map((item) => (
           <FileRow
             key={item.id}
             item={item}
-            selected={item.id === activeId}
+            selected={item.id === activeId && isLoadableArtifact(item)}
+            selecting={selecting}
+            checked={selectedIds.includes(item.id)}
             editing={editingId === item.id}
             justSaved={savedId === item.id}
+            onToggleSelected={() => onToggleSelected(item.id)}
             onSelect={() => onSelect(item.id)}
             onStartEdit={() => {
-              onSelect(item.id);
+              if (isLoadableArtifact(item)) onSelect(item.id);
               setEditingId(item.id);
             }}
             onCancelEdit={() => setEditingId(null)}
@@ -224,7 +447,9 @@ function FilesTable({
                 setSavedId((current) => (current === item.id ? null : current));
               }, 900);
             }}
+            onRetry={() => onRetry(item.id)}
             onDelete={() => onDelete(item)}
+            onImportingClick={onImportingClick}
           />
         ))}
       </div>
@@ -235,25 +460,39 @@ function FilesTable({
 function FileRow({
   item,
   selected,
+  selecting,
+  checked,
   editing,
   justSaved,
+  onToggleSelected,
   onSelect,
   onStartEdit,
   onCancelEdit,
   onSave,
+  onRetry,
   onDelete,
+  onImportingClick,
 }: {
   item: Artifact;
   selected: boolean;
+  selecting: boolean;
+  checked: boolean;
   editing: boolean;
   justSaved: boolean;
+  onToggleSelected: () => void;
   onSelect: () => void;
   onStartEdit: () => void;
   onCancelEdit: () => void;
   onSave: (name: string) => Promise<void>;
+  onRetry: () => Promise<void>;
   onDelete: () => void;
+  onImportingClick: () => void;
 }) {
   const quality = transcriptionQuality(item);
+  const pending = isPendingArtifact(item);
+  const failed = isFailedArtifact(item);
+  const blocked = !isLoadableArtifact(item);
+  const [retrying, setRetrying] = useState(false);
   const [draft, setDraft] = useState(item.title);
   const saving = useRef(false);
   const ignoreBlur = useRef(false);
@@ -286,20 +525,42 @@ function FileRow({
   return (
     <div
       role="button"
-      tabIndex={0}
+      tabIndex={blocked && !selecting && !isImportingArtifact(item) ? -1 : 0}
+      aria-disabled={blocked && !selecting && !isImportingArtifact(item) ? true : undefined}
+      aria-pressed={selecting ? checked : undefined}
       onClick={() => {
-        if (!editing) onSelect();
+        if (editing) return;
+        if (selecting) {
+          onToggleSelected();
+          return;
+        }
+        if (isImportingArtifact(item)) {
+          onImportingClick();
+          return;
+        }
+        if (!blocked) onSelect();
       }}
       onKeyDown={(event) => {
         if (editing) return;
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          onSelect();
+          if (selecting) onToggleSelected();
+          else if (isImportingArtifact(item)) onImportingClick();
+          else if (!blocked) onSelect();
         }
       }}
       className={cn(
-        "grid w-full grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-4 rounded-xl border px-4 py-2.5 text-left text-sm transition-colors",
-        selected ? "border-primary/40 bg-primary/18" : "border-transparent hover:bg-white/5",
+        "grid w-full items-center gap-x-4 rounded-xl border px-4 py-2.5 text-left text-sm transition-colors",
+        filesGridClass,
+        pending
+          ? "border-dashed border-amber-400/40 bg-amber-400/[0.04] text-muted-foreground"
+          : failed
+            ? "border-dashed border-destructive/35 bg-destructive/[0.04]"
+            : selecting && checked
+              ? "border-primary/40 bg-primary/18"
+              : selected
+                ? "border-primary/40 bg-primary/18"
+                : "border-transparent hover:bg-white/5",
       )}
     >
       <span className="min-w-0">
@@ -343,34 +604,93 @@ function FileRow({
       <span className="w-[7.25rem] whitespace-nowrap text-muted-foreground">
         {formatAddedDate(item.createdAt)}
       </span>
-      <span className="w-[6.75rem]">
+      <span className="flex w-[10rem] items-center gap-1.5">
         <Badge variant={qualityBadge(quality.kind)} className="capitalize">
           {quality.kind === "importing" ? <Loader2 className="animate-spin" /> : null}
           {quality.label}
         </Badge>
+        {failed && item.hasAudio ? (
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={retrying}
+            aria-label={`Retry ${item.title}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (retrying) return;
+              setRetrying(true);
+              void onRetry().finally(() => setRetrying(false));
+            }}
+          >
+            {retrying ? <Loader2 className="animate-spin" /> : <RotateCcw />}
+            Retry
+          </Button>
+        ) : null}
       </span>
-      <span
-        className="flex w-14 justify-end gap-0.5"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          aria-label="Rename file"
-          onClick={onStartEdit}
+      {selecting ? (
+        <span className="flex w-14 items-center justify-end">
+          <FileCheckbox
+            checked={checked}
+            label={`Select ${item.title}`}
+            onToggle={onToggleSelected}
+          />
+        </span>
+      ) : (
+        <span
+          className="flex w-14 justify-end gap-0.5"
+          onClick={(event) => event.stopPropagation()}
         >
-          <Pencil />
-        </Button>
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            aria-label="Rename file"
+            onClick={onStartEdit}
+          >
+            <Pencil />
+          </Button>
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            aria-label="Delete file"
+            className="text-muted-foreground hover:text-destructive"
+            onClick={onDelete}
+          >
+            <Trash2 />
+          </Button>
+        </span>
+      )}
+    </div>
+  );
+}
+
+function FailedTranscript({ artifact }: { artifact: Artifact }) {
+  const refresh = useArtifactStore((state) => state.refresh);
+  const [retrying, setRetrying] = useState(false);
+
+  return (
+    <div className="flex flex-col items-start gap-3">
+      <p className="text-sm text-destructive">
+        {artifact.errorMessage || "This file couldn’t be processed. You can try again."}
+      </p>
+      {artifact.hasAudio ? (
         <Button
-          size="icon-xs"
-          variant="ghost"
-          aria-label="Delete file"
-          className="text-muted-foreground hover:text-destructive"
-          onClick={onDelete}
+          size="sm"
+          variant="secondary"
+          disabled={retrying}
+          onClick={() => {
+            if (retrying) return;
+            setRetrying(true);
+            void api
+              .retryArtifact(artifact.id)
+              .then(() => refresh())
+              .catch((err) => toast.error(errorMessage(err)))
+              .finally(() => setRetrying(false));
+          }}
         >
-          <Trash2 />
+          {retrying ? <Loader2 className="animate-spin" /> : <RotateCcw />}
+          Retry
         </Button>
-      </span>
+      ) : null}
     </div>
   );
 }
@@ -385,6 +705,7 @@ function ArtifactDetail({ artifact }: { artifact: Artifact }) {
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [followPlayback, setFollowPlayback] = useState(true);
+  const [audioDurationMs, setAudioDurationMs] = useState(artifact.durationMs);
 
   const activeIndex = useMemo(
     () => activeSegmentIndex(segments, currentTimeMs),
@@ -398,6 +719,7 @@ function ArtifactDetail({ artifact }: { artifact: Artifact }) {
     setProgress(0);
     setCurrentTimeMs(0);
     setPlaying(false);
+    setAudioDurationMs(artifact.durationMs);
     if (!artifact.hasAudio) return;
     void api.getArtifactAudioPath(artifact.id).then(async (path) => {
       if (!path || cancelled) return;
@@ -417,17 +739,28 @@ function ArtifactDetail({ artifact }: { artifact: Artifact }) {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    const syncDuration = () => {
+      if (Number.isFinite(audio.duration) && audio.duration > 0) {
+        setAudioDurationMs(audio.duration * 1000);
+      }
+    };
     const onTime = () => {
       const duration = audio.duration || artifact.durationMs / 1000;
       setCurrentTimeMs(audio.currentTime * 1000);
       setProgress(duration ? audio.currentTime / duration : 0);
+      syncDuration();
     };
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
+    audio.addEventListener("loadedmetadata", syncDuration);
+    audio.addEventListener("durationchange", syncDuration);
     audio.addEventListener("timeupdate", onTime);
     audio.addEventListener("play", onPlay);
     audio.addEventListener("pause", onPause);
+    syncDuration();
     return () => {
+      audio.removeEventListener("loadedmetadata", syncDuration);
+      audio.removeEventListener("durationchange", syncDuration);
       audio.removeEventListener("timeupdate", onTime);
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("pause", onPause);
@@ -483,15 +816,25 @@ function ArtifactDetail({ artifact }: { artifact: Artifact }) {
                 </div>
               )}
             </div>
-            <Button
-              size="sm"
-              variant={followPlayback ? "secondary" : "ghost"}
+            <button
+              type="button"
               aria-pressed={followPlayback}
+              aria-label={followPlayback ? "Stop following playback" : "Follow playback in the transcript"}
               onClick={() => setFollowPlayback((value) => !value)}
+              className={cn(
+                "flex shrink-0 flex-col items-center gap-1 rounded-xl bg-white/[0.07] px-2.5 py-2 transition-colors hover:bg-white/[0.11]",
+                followPlayback ? "text-foreground" : "text-muted-foreground",
+              )}
             >
-              {followPlayback ? <Link2 /> : <Link2Off />}
-              Follow
-            </Button>
+              <span className="font-mono text-[11px] tabular-nums">
+                {formatTimestamp(currentTimeMs)}
+                <span className="text-muted-foreground"> / {formatTimestamp(audioDurationMs || artifact.durationMs)}</span>
+              </span>
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium">
+                {followPlayback ? <Link2 className="size-3" /> : <Link2Off className="size-3" />}
+                Follow
+              </span>
+            </button>
           </div>
         </div>
       ) : (
@@ -499,12 +842,14 @@ function ArtifactDetail({ artifact }: { artifact: Artifact }) {
       )}
 
       <ScrollArea className="mt-3 min-h-0 flex-1">
-        {artifact.status === "transcribing" || artifact.status === "queued" ? (
+        {artifact.status === "transcribing" ? (
           <p className="text-sm text-muted-foreground">
             Transcribing with small.en. This can take a minute on a long lecture.
           </p>
+        ) : artifact.status === "queued" ? (
+          <p className="text-sm text-muted-foreground">Waiting to transcribe…</p>
         ) : artifact.status === "failed" ? (
-          <p className="text-sm text-destructive">{artifact.errorMessage || "Transcription failed."}</p>
+          <FailedTranscript artifact={artifact} />
         ) : segments.length > 0 ? (
           <div className="flex flex-col gap-1 py-0.5 pr-2">
             {segments.map((seg, index) => (

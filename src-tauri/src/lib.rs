@@ -26,10 +26,20 @@ pub fn run() {
             if let Ok(dir) = paths::library_dir(handle) {
                 std::fs::create_dir_all(dir).ok();
             }
-            app.manage(Arc::new(AppState {
+            let state = Arc::new(AppState {
                 db,
                 transcriber: std::sync::Mutex::new(None),
-            }));
+            });
+            let _ = state.db.fail_interrupted_imports();
+            app.manage(state);
+            if let Some(window) = app.get_webview_window("main") {
+                let focused = window.clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Enter { .. }) = event {
+                        let _ = focused.set_focus();
+                    }
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -49,6 +59,7 @@ pub fn run() {
             commands::import_transcript,
             commands::rename_artifact,
             commands::delete_artifact,
+            commands::retry_artifact,
             commands::get_artifact_audio_path,
             commands::set_openai_api_key,
             commands::clear_openai_api_key,

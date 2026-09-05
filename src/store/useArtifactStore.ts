@@ -2,7 +2,14 @@ import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
 import * as api from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
+import { isLoadableArtifact } from "@/lib/quality";
 import type { Artifact } from "@/lib/types";
+
+function resolveActiveId(artifacts: Artifact[], currentId: string | null) {
+  const current = artifacts.find((item) => item.id === currentId);
+  if (current && isLoadableArtifact(current)) return current.id;
+  return artifacts.find(isLoadableArtifact)?.id ?? null;
+}
 
 type ArtifactState = {
   groupId: string | null;
@@ -29,15 +36,19 @@ export const useArtifactStore = create<ArtifactState>((set, get) => ({
     set({ groupId, loading: true, error: null });
     try {
       const artifacts = await api.listArtifacts(groupId);
-      const activeId = artifacts.some((item) => item.id === get().activeId)
-        ? get().activeId
-        : (artifacts[0]?.id ?? null);
-      set({ artifacts, activeId, loading: false });
+      set({ artifacts, activeId: resolveActiveId(artifacts, get().activeId), loading: false });
     } catch (err) {
       set({ loading: false, error: errorMessage(err) });
     }
   },
-  setActive: (id) => set({ activeId: id }),
+  setActive: (id) => {
+    if (!id) {
+      set({ activeId: null });
+      return;
+    }
+    const artifact = get().artifacts.find((item) => item.id === id);
+    if (artifact && isLoadableArtifact(artifact)) set({ activeId: id });
+  },
   refresh: async () => {
     const groupId = get().groupId;
     if (groupId) await get().load(groupId);

@@ -8,11 +8,31 @@ export type QualityKind =
   | "large"
   | "imported"
   | "importing"
+  | "pending"
   | "failed"
   | "unknown";
 
+export function isPendingArtifact(artifact: Artifact) {
+  return artifact.status === "queued";
+}
+
+export function isImportingArtifact(artifact: Artifact) {
+  return artifact.status === "transcribing";
+}
+
+export function isFailedArtifact(artifact: Artifact) {
+  return artifact.status === "failed";
+}
+
+export function isLoadableArtifact(artifact: Artifact) {
+  return !isPendingArtifact(artifact) && !isImportingArtifact(artifact);
+}
+
 export function transcriptionQuality(artifact: Artifact): { kind: QualityKind; label: string } {
-  if (artifact.status === "queued" || artifact.status === "transcribing") {
+  if (artifact.status === "queued") {
+    return { kind: "pending", label: "Pending" };
+  }
+  if (artifact.status === "transcribing") {
     return { kind: "importing", label: "Importing" };
   }
   if (artifact.status === "failed") {

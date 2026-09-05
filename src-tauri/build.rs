@@ -17,6 +17,7 @@ fn main() {
             "import_transcript",
             "rename_artifact",
             "delete_artifact",
+            "retry_artifact",
             "get_artifact_audio_path",
             "set_openai_api_key",
             "clear_openai_api_key",

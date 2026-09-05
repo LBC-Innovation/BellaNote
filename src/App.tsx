@@ -4,7 +4,6 @@ import { ChatPanel } from "@/components/chat-panel";
 import { LibraryPanel } from "@/components/library-panel";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { WorkspacePanel } from "@/components/workspace-panel";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import * as api from "@/lib/api";
 import { installArtifactListeners } from "@/store/useArtifactStore";
@@ -12,6 +11,7 @@ import { useLibraryStore } from "@/store/useLibraryStore";
 
 const LIBRARY_COLLAPSED_KEY = "bellanote.libraryCollapsed";
 const TRANSCRIPT_COLLAPSED_KEY = "bellanote.transcriptCollapsed";
+const CHAT_COLLAPSED_KEY = "bellanote.chatCollapsed";
 
 function usePersistedFlag(key: string) {
   const [value, setValue] = useState(() => {
@@ -34,10 +34,19 @@ function usePersistedFlag(key: string) {
   return [value, change] as const;
 }
 
-function mainGridCols(libraryCollapsed: boolean, transcriptCollapsed: boolean) {
-  const library = libraryCollapsed ? "56px" : "300px";
+function mainGridCols(
+  libraryCollapsed: boolean,
+  transcriptCollapsed: boolean,
+  chatCollapsed: boolean,
+) {
+  const bothContentCollapsed = transcriptCollapsed && chatCollapsed;
+  const library = libraryCollapsed && !bothContentCollapsed
+    ? "56px"
+    : bothContentCollapsed
+      ? "minmax(0,1fr)"
+      : "300px";
   const transcript = transcriptCollapsed ? "56px" : "minmax(0,1fr)";
-  const chat = transcriptCollapsed ? "minmax(0,1fr)" : "340px";
+  const chat = chatCollapsed ? "56px" : transcriptCollapsed ? "minmax(0,1fr)" : "340px";
   return `${library} ${transcript} ${chat}`;
 }
 
@@ -48,6 +57,7 @@ export default function App() {
   const [keyConfigured, setKeyConfigured] = useState(false);
   const [libraryCollapsed, setLibraryCollapsed] = usePersistedFlag(LIBRARY_COLLAPSED_KEY);
   const [transcriptCollapsed, setTranscriptCollapsed] = usePersistedFlag(TRANSCRIPT_COLLAPSED_KEY);
+  const [chatCollapsed, setChatCollapsed] = usePersistedFlag(CHAT_COLLAPSED_KEY);
 
   useEffect(() => {
     void load();
@@ -61,11 +71,8 @@ export default function App() {
         className="flex h-12 shrink-0 items-center justify-between px-5"
         data-tauri-drag-region
       >
-        <div className="flex items-center gap-2.5 pl-16">
+        <div className="flex items-center pl-16">
           <span className="text-sm font-semibold tracking-tight">BellaNote</span>
-          <Badge variant="secondary" className="font-normal">
-            Beautiful Note
-          </Badge>
         </div>
         <Button
           variant="ghost"
@@ -81,11 +88,16 @@ export default function App() {
 
       <main
         className="grid min-h-0 flex-1 gap-3 px-3 pb-3 transition-[grid-template-columns] duration-300 ease-out"
-        style={{ gridTemplateColumns: mainGridCols(libraryCollapsed, transcriptCollapsed) }}
+        style={{ gridTemplateColumns: mainGridCols(libraryCollapsed, transcriptCollapsed, chatCollapsed) }}
       >
         <LibraryPanel collapsed={libraryCollapsed} onCollapsedChange={setLibraryCollapsed} />
         <WorkspacePanel collapsed={transcriptCollapsed} onCollapsedChange={setTranscriptCollapsed} />
-        <ChatPanel keyConfigured={keyConfigured} onNeedKey={() => setSettingsOpen(true)} />
+        <ChatPanel
+          collapsed={chatCollapsed}
+          onCollapsedChange={setChatCollapsed}
+          keyConfigured={keyConfigured}
+          onNeedKey={() => setSettingsOpen(true)}
+        />
       </main>
 
       <SettingsDialog

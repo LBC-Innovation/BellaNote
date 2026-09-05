@@ -1,7 +1,8 @@
 # BellaNote — First-slice user stories
 
-**Document status:** Ready for comment  
-**Platform:** macOS desktop app  
+**Document status:** First Mac slice implemented — stories rewritten to the shipped app, not the original draft  
+**Last review:** 5 September 2026 (workspace polish: multi-file import, retry, rails, transcript chips / timeclock)  
+**Platform:** macOS desktop app (Tauri 2)  
 **Slice goal:** A student (or anyone with a similar hierarchy) can create an organization and topic categories, file audio and existing transcripts into meeting groups, and ask natural-language questions against a chosen scope.
 
 This slice is narrower than the full [`PRODUCT_SCOPE.md`](./PRODUCT_SCOPE.md). Live microphone / system-audio capture, Windows, summaries, task extraction, and a sharing backend are **out**. The Duke example below is the north-star walkthrough.
@@ -12,11 +13,13 @@ This slice is narrower than the full [`PRODUCT_SCOPE.md`](./PRODUCT_SCOPE.md). L
 
 Each story uses:
 
+- **Status** — `Complete` (shipped as described), `Partial` (shipped with leftover gaps), or `Not started`  
 - **As a / I want / so that** — the user-facing intent  
-- **Acceptance** — what “done” looks like  
-- **Scenarios** — Given / When / Then, including edges we should decide before building
+- **Acceptance** — what the current app does  
+- **Scenarios** — Given / When / Then, rewritten to match implementation  
+- **Still open** — only on Partial stories; leftover work
 
-Comment in the **Open decisions** boxes and on any scenario marked **DECIDE**. Those are the places the product can go either way.
+Stories that shipped differently from the original draft were updated to the implemented behavior, not left as the older spec.
 
 ---
 
@@ -54,23 +57,24 @@ Duke                          ← Organization
 | **Meeting group** | A named bundle of related sessions / artifacts | Lecture Class 1 |
 | **Artifact** | One audio file or one imported transcript living in a meeting group | `zoom-export.vtt` |
 | **Transcript** | The text BellaNote will chat over — produced locally from audio, or imported | |
-| **Chat scope** | How wide the model is allowed to look | Org / topic / meeting group / one transcript |
+| **Chat scope** | How wide the model is allowed to look | Org / topic / meeting group / this file |
 
-**Refinement vs. product scope:** [`PRODUCT_SCOPE.md`](./PRODUCT_SCOPE.md) treated each recording as a standalone meeting, with org and topic as optional independent tags. This slice introduces **meeting group** as a first-class folder of artifacts, and treats the intended path as **Org → Topic → Group → Artifact**. Optional / unfiled items are still covered as edge cases.
+**Refinement vs. product scope:** [`PRODUCT_SCOPE.md`](./PRODUCT_SCOPE.md) still describes the long-term optional-tag meeting. This slice **ships** meeting group as a first-class folder of artifacts on the path **Org → Topic → Group → Artifact**. Unfiled org/topic items are out of this slice.
 
 ---
 
 ## Slice in / out
 
-| In | Out |
+| In (shipped unless noted) | Out |
 |---|---|
 | Launch on Mac | Windows |
 | Create / rename / delete org, topic, meeting group | Live mic or system+meeting capture |
-| Upload audio → transcribe on device | YouTube URL ingest |
-| Import existing transcript files | Audience-aware summaries, task extraction |
-| Place, move, and view artifacts in the hierarchy | Sharing / multi-user backend |
-| ChatGPT chat with an explicit scope | Calendar, speaker diarization |
-| User-provided OpenAI API token | Mobile |
+| Upload one or more audio files → one-shot `small.en` on device; queue extras | YouTube URL ingest |
+| Import one or more `.vtt` / `.srt` / `.txt` | Audience-aware summaries, task extraction |
+| View artifacts in the hierarchy; remove one or many with confirm | Move an artifact between groups (US-205, not started) |
+| Static waveform + click-to-seek + playhead clock / Follow on audio artifacts | Sharing / multi-user backend |
+| ChatGPT (`gpt-4o`) with an explicit scope | Calendar, speaker diarization |
+| User-provided OpenAI API token in the keychain | Mobile |
 
 ---
 
@@ -78,35 +82,37 @@ Duke                          ← Organization
 
 ```
 Epic 1  Launch & hierarchy
-        US-101  Launch the Mac app
-        US-102  Create an organization
-        US-103  Create a topic category
-        US-104  Create a meeting group
-        US-105  Browse the hierarchy
-        US-106  Rename containers
-        US-107  Delete containers
+        ~~US-101  Launch the Mac app~~                      Complete
+        ~~US-102  Create an organization~~                  Complete
+        ~~US-103  Create a topic category~~                 Complete
+        ~~US-104  Create a meeting group~~                  Complete
+        ~~US-105  Browse the hierarchy~~                    Complete
+        ~~US-106  Rename containers~~                       Complete
+        ~~US-107  Delete containers~~                       Complete
 
 Epic 2  Files & transcripts
-        US-201  Add an audio file to a meeting group
-        US-202  Watch transcription finish
-        US-203  Import an existing transcript
-        US-204  Open and read an artifact
-        US-205  Re-file / move an artifact
-        US-206  Remove an artifact
+        ~~US-201  Add an audio file to a meeting group~~    Complete
+        ~~US-202  Watch transcription finish~~              Complete
+        ~~US-203  Import an existing transcript~~           Complete
+        ~~US-204  Open and read an artifact~~               Complete
+        US-205  Re-file / move an artifact                 Not started
+        ~~US-206  Remove an artifact~~                      Complete
 
 Epic 3  Scoped chat
-        US-301  Save the ChatGPT API token
-        US-302  Ask a question against a chosen scope
-        US-303  Read a well-organized answer
-        US-304  Continue a conversation
-        US-305  See what the model used (and did not use)
+        ~~US-301  Save the ChatGPT API token~~              Complete
+        ~~US-302  Ask a question against a chosen scope~~   Complete
+        US-303  Read a well-organized answer               Partial
+        US-304  Continue a conversation                    Partial
+        US-305  See what the model used (and did not use)  Partial
 ```
 
 ---
 
 # Epic 1 — Launch the Mac app and build the hierarchy
 
-## US-101 — Launch BellaNote on a Mac
+## ~~US-101 — Launch BellaNote on a Mac~~
+
+**Status:** Complete
 
 **As a** student on a Mac,  
 **I want** to open BellaNote like any other desktop app,  
@@ -114,31 +120,35 @@ Epic 3  Scoped chat
 
 **Acceptance**
 
-- A standard macOS app launches to a local workspace.  
+- A standard macOS Tauri app launches to a local three-pane workspace (Library, Transcript, Chat).  
 - No sign-in is required.  
-- First launch shows an empty state that explains the next step (create an organization).  
-- Closing and reopening restores organizations, topics, groups, and artifacts.
+- First launch shows an empty library (“Start with an organization”) and a workspace prompt to create an organization.  
+- Closing and reopening restores organizations, topics, groups, and artifacts from local SQLite.  
+- Library, transcript, and chat collapse-to-rail state is remembered; the last selected tree row is not (selection starts unset).
 
 ### Scenarios
 
 **Happy path — first launch**
 
 - **Given** BellaNote is installed and has never been opened  
-- **When** I launch it from Applications or Spotlight  
-- **Then** I see a calm empty workspace and a primary action to create an organization  
+- **When** I launch it  
+- **Then** I see the empty library and a primary **Organization** action  
+- **And** the workspace explains the Duke-style tree  
 - **And** I am not asked for an account or cloud login
 
 **Relaunch restores work**
 
 - **Given** I previously created Duke / Competitive Strategies / Lecture Class 1  
 - **When** I quit and launch again  
-- **Then** that hierarchy is still there, with the last place I was looking selected if possible
+- **Then** that hierarchy is still in the library  
+- **And** no tree row is pre-selected  
+- **And** collapsed library / transcript / chat rails stay as I left them
 
 **Already running**
 
 - **Given** BellaNote is already open  
 - **When** I launch it again  
-- **Then** the existing window comes forward (no second empty workspace)
+- **Then** macOS brings the existing window forward (one app window)
 
 **Permissions (this slice)**
 
@@ -149,7 +159,9 @@ Epic 3  Scoped chat
 
 ---
 
-## US-102 — Create an organization
+## ~~US-102 — Create an organization~~
+
+**Status:** Complete
 
 **As a** student,  
 **I want** to create an organization named after my school,  
@@ -157,9 +169,11 @@ Epic 3  Scoped chat
 
 **Acceptance**
 
-- I can create an organization with a name.  
-- The new org appears immediately in the library.  
-- Names are trimmed; empty names are rejected.  
+- I can create an organization from the library **Organization** button (or the collapsed-rail plus).  
+- The new org appears immediately as a top-level library row and becomes the selection.  
+- Names are trimmed; empty / whitespace-only names are rejected with “A name is required.”  
+- Names are capped at 80 characters.  
+- Duplicate org names are blocked case-insensitively (“An organization with that name already exists.”).  
 - I can have more than one organization (e.g. Duke and a summer internship).
 
 ### Scenarios
@@ -169,32 +183,33 @@ Epic 3  Scoped chat
 - **Given** I am in the empty or existing library  
 - **When** I create an organization named `Duke`  
 - **Then** Duke appears as a top-level item  
-- **And** I can open it and see that it has no topics yet
+- **And** the workspace asks me to add a topic under Duke
 
 **Whitespace-only name**
 
 - **Given** the create-organization field is open  
 - **When** I enter `   ` and confirm  
 - **Then** the org is not created  
-- **And** I see a short message that a name is required
+- **And** I see “A name is required.”
 
-**Duplicate name — DECIDE**
+**Duplicate name**
 
 - **Given** Duke already exists  
 - **When** I try to create another organization named `Duke` (or `duke`)  
-- **Then** *(proposed)* the app blocks it and asks me to pick a different name  
-- **And** we treat names as case-insensitive for uniqueness
+- **Then** the app blocks it and shows that an organization with that name already exists
 
 **Very long name**
 
 - **Given** I paste a 300-character name  
-- **When** I save  
-- **Then** the app either truncates at a documented limit (proposed: 80 characters) or rejects with a clear reason  
-- **And** the library row does not break the layout
+- **When** I type in the field  
+- **Then** input stops at 80 characters  
+- **And** the library row truncates instead of breaking the layout
 
 ---
 
-## US-103 — Create a topic category
+## ~~US-103 — Create a topic category~~
+
+**Status:** Complete
 
 **As a** Duke student,  
 **I want** to add a topic category for a class,  
@@ -202,9 +217,12 @@ Epic 3  Scoped chat
 
 **Acceptance**
 
-- From an organization, I can create a topic category with a name.  
-- The topic appears nested under that organization.  
-- A topic is not required to contain meeting groups yet.
+- From an organization row I can create a topic with a name (inline **Topic** control).  
+- The topic appears nested under that organization and becomes the selection.  
+- A topic is not required to contain meeting groups yet.  
+- Duplicate topic names in the same org are blocked case-insensitively.  
+- The same topic name may exist under a different organization.  
+- There is no way to create a topic without an organization.
 
 ### Scenarios
 
@@ -213,7 +231,8 @@ Epic 3  Scoped chat
 - **Given** organization Duke exists  
 - **When** I create a topic category `Competitive Strategies` under Duke  
 - **Then** it appears under Duke  
-- **And** opening it shows an empty list of meeting groups and an action to create one
+- **And** the workspace asks me to add a meeting group  
+- **And** a **Meeting group** action sits under that topic in the library
 
 **Second course**
 
@@ -229,23 +248,24 @@ Epic 3  Scoped chat
 - **When** I create Competitive Strategies under Coursera  
 - **Then** both topics exist independently
 
-**Duplicate topic in the same org — DECIDE**
+**Duplicate topic in the same org**
 
 - **Given** Duke already has Competitive Strategies  
 - **When** I create another topic named `Competitive Strategies` under Duke  
-- **Then** *(proposed)* the app blocks the duplicate inside that org
+- **Then** the app blocks it (“That topic already exists in this organization.”)
 
-**Topic without an organization — DECIDE**
+**Topic without an organization**
 
 - **Given** I have not created any organization  
 - **When** I look for a way to create a topic  
-- **Then** *(proposed for this slice)* I must create an organization first  
-- **And** the empty state says so  
-- **Comment asked:** later we may allow unfiled topics; this slice can stay hierarchical to match Duke.
+- **Then** I must create an organization first  
+- **And** the empty states say so
 
 ---
 
-## US-104 — Create a meeting group
+## ~~US-104 — Create a meeting group~~
+
+**Status:** Complete
 
 **As a** student in Competitive Strategies,  
 **I want** to create named meeting groups for each lecture or study session,  
@@ -253,9 +273,12 @@ Epic 3  Scoped chat
 
 **Acceptance**
 
-- From a topic, I can create a meeting group with a name.  
-- Optional date (defaults to today) can be set at creation or edited later.  
-- The group can be empty (no files yet).
+- From a topic I can create a meeting group with a name (inline **Meeting group** control).  
+- The group is dated at creation (now) and that date is shown as secondary text on the library row.  
+- The date is not editable in this slice.  
+- Duplicate names in the same topic are allowed; rows are distinguished by date.  
+- The group can be empty. Opening it shows the Files card and an **Import Meeting** control (**Audio files** / **Transcript files**), which opens a multi-file drop-zone modal.  
+- A meeting group cannot be created except under a topic.
 
 ### Scenarios
 
@@ -264,31 +287,33 @@ Epic 3  Scoped chat
 - **Given** I am in Duke → Competitive Strategies  
 - **When** I create meeting groups `Lecture Class 1`, `Lecture Class 2`, and `Mid Term Study Session`  
 - **Then** all three appear under the topic  
-- **And** each can be opened and shows an empty file list plus “Add audio” and “Add transcript”
+- **And** each can be opened and shows an empty file list plus **Import Meeting**
 
 **Default date**
 
 - **Given** today is 5 September 2026  
-- **When** I create Lecture Class 1 without picking a date  
+- **When** I create Lecture Class 1  
 - **Then** the group is dated today  
-- **And** I can later change that date
+- **And** that date appears under the group name in the library
 
-**Duplicate group name in the same topic — DECIDE**
+**Duplicate group name in the same topic**
 
 - **Given** Lecture Class 1 already exists in Competitive Strategies  
 - **When** I create another `Lecture Class 1` in the same topic  
-- **Then** *(proposed)* allowed if I really want two (e.g. two sections), but the UI distinguishes them by date  
-- **Or** we block duplicates — needs a call
+- **Then** both groups exist  
+- **And** the library distinguishes them by date
 
-**Group without a topic — DECIDE**
+**Group without a topic**
 
 - **Given** I am looking at Duke with no topic selected  
 - **When** I try to create a meeting group  
-- **Then** *(proposed for this slice)* I must pick or create a topic first
+- **Then** I must pick or create a topic first
 
 ---
 
-## US-105 — Browse the hierarchy
+## ~~US-105 — Browse the hierarchy~~
+
+**Status:** Complete
 
 **As a** student,  
 **I want** to move from Duke down to a single lecture group in a few clicks,  
@@ -296,9 +321,12 @@ Epic 3  Scoped chat
 
 **Acceptance**
 
-- Library shows Org → Topic → Meeting group.  
-- Selecting a level shows only that level’s children.  
-- Breadcrumb or equivalent always shows the path (e.g. Duke / Competitive Strategies / Lecture Class 1).  
+- Library is a tree: Org → Topic → Meeting group. Organizations and topics collapse; clicking anywhere on the row (except the overflow menu) expands or collapses that branch.  
+- **Collapse all** folds every org and topic. Expanded / collapsed branch ids persist (`bellanote.libraryTreeCollapsed`).  
+- Selecting a row highlights it and updates the workspace; siblings stay visible when their parent is expanded.  
+- The workspace header breadcrumb shows the path (e.g. Duke / Competitive Strategies / Lecture Class 1).  
+- Selecting an org or topic shows a teaching empty state; selecting a group shows that group’s files.  
+- Library, transcript, and chat panes each collapse to a vertical rail (click the rail to expand). Rail state persists.  
 - Empty levels have a useful empty state, not a blank panel.
 
 ### Scenarios
@@ -307,26 +335,43 @@ Epic 3  Scoped chat
 
 - **Given** the Duke example data exists  
 - **When** I click Duke, then Competitive Strategies, then Lecture Class 1  
-- **Then** I see only the artifacts in Lecture Class 1  
-- **And** the path Duke / Competitive Strategies / Lecture Class 1 is visible
+- **Then** the workspace shows only the artifacts in Lecture Class 1  
+- **And** the breadcrumb reads Duke / Competitive Strategies / Lecture Class 1  
+- **And** the rest of the tree remains visible in the library
 
 **Org with many topics**
 
 - **Given** Duke has 12 topic categories  
 - **When** I open Duke  
-- **Then** the list is scrollable and readable  
+- **Then** the library list is scrollable and readable  
 - **And** I can find Competitive Strategies without renaming anything
 
 **Empty topic**
 
 - **Given** I just created Competitive Strategies  
 - **When** I open it  
-- **Then** I see “No meeting groups yet” and a create action  
-- **And** I do not see other topics’ groups
+- **Then** the workspace tells me to add a meeting group  
+- **And** I do not see other topics’ files
+
+**Collapse a branch**
+
+- **Given** Duke is expanded and shows Competitive Strategies  
+- **When** I click the Duke row (not the menu)  
+- **Then** its topics hide  
+- **And** that collapsed state is still there after I quit and reopen
+
+**Collapse a pane**
+
+- **Given** I am reading a transcript and chatting  
+- **When** I collapse Library, Transcript, or Chat  
+- **Then** that pane becomes a labeled rail  
+- **And** the remaining panes take the leftover space
 
 ---
 
-## US-106 — Rename a container
+## ~~US-106 — Rename a container~~
+
+**Status:** Complete
 
 **As a** student,  
 **I want** to rename an organization, topic, or meeting group,  
@@ -334,9 +379,10 @@ Epic 3  Scoped chat
 
 **Acceptance**
 
-- Rename in place or via a simple edit.  
+- Rename from the row overflow menu (Rename), via a dialog with the same 80-character / trim rules as create.  
 - Children stay attached after rename.  
-- Same uniqueness rules as create.
+- Same uniqueness rules as create (org and topic blocked; meeting groups may collide).  
+- Chat scopes keep working because they use stable ids, not names.
 
 ### Scenarios
 
@@ -355,7 +401,9 @@ Epic 3  Scoped chat
 
 ---
 
-## US-107 — Delete a container
+## ~~US-107 — Delete a container~~
+
+**Status:** Complete
 
 **As a** student,  
 **I want** to delete an organization, topic, or meeting group I no longer need,  
@@ -363,9 +411,11 @@ Epic 3  Scoped chat
 
 **Acceptance**
 
-- Delete asks for confirmation when the container is not empty.  
-- I understand what will be removed (children + artifacts).  
-- Cancel leaves everything unchanged.
+- Delete from the row overflow menu always asks for confirmation (empty or not).  
+- Copy explains that the item and everything inside it leaves BellaNote, and that original files on disk are not deleted.  
+- Confirm cascades: org → topics → groups → artifacts (and BellaNote’s library copies).  
+- Cancel leaves everything unchanged.  
+- There is no undo.
 
 ### Scenarios
 
@@ -379,9 +429,9 @@ Epic 3  Scoped chat
 
 - **Given** Lecture Class 1 contains two audio transcripts and one imported VTT  
 - **When** I choose delete  
-- **Then** I am told those 3 artifacts will be removed from BellaNote  
-- **And** I must confirm  
-- **And** *(proposed)* the original files on disk are **not** deleted — only BellaNote’s copy / reference
+- **Then** I must confirm  
+- **And** those artifacts are removed from BellaNote  
+- **And** the original files on disk are not deleted — only BellaNote’s copies
 
 **Delete a topic**
 
@@ -397,18 +447,19 @@ Epic 3  Scoped chat
 - **Then** the entire tree under Duke is removed  
 - **And** other organizations are untouched
 
-**Undo — DECIDE**
+**Undo**
 
 - **Given** I just deleted a meeting group  
 - **When** I look for undo  
-- **Then** *(proposed for this slice)* no undo; confirmation is the safety net  
-- **Comment asked:** the POC had undo-on-delete for meetings. Worth matching?
+- **Then** there is no undo; confirmation is the safety net
 
 ---
 
 # Epic 2 — Add files and organize transcripts
 
-## US-201 — Add an audio file to a meeting group
+## ~~US-201 — Add an audio file to a meeting group~~
+
+**Status:** Complete
 
 **As a** student,  
 **I want** to choose an audio file from my Mac and attach it to a meeting group,  
@@ -416,66 +467,70 @@ Epic 3  Scoped chat
 
 **Acceptance**
 
-- From a meeting group I can pick one or more audio files (at least wav, mp3, m4a, aac, ogg, flac).  
-- Each file becomes an artifact in that group with the original filename as the default title (editable).  
-- Transcription starts automatically after a successful add.  
-- Unsupported types are rejected with a readable reason.
+- From a meeting group, **Import Meeting → Audio files** opens a drop-zone modal (not an immediate single-file picker).  
+- Click the drop canvas to pick one or more audio files (`wav`, `mp3`, `m4a`, `aac`, `ogg`, `flac`). Dropping files onto the open modal / window also adds them.  
+- Each file is copied into Application Support (`library/{id}/source.{ext}`) and imported in sequence so extras queue.  
+- The artifact title defaults to the file stem (editable later); the original filename is shown as secondary text.  
+- Transcription starts automatically (`small.en` one-shot). If another job already holds the worker, later files stay **Pending**.  
+- Unsupported types and video (`mp4` / `mov` / etc.) are rejected with a readable reason.  
+- Adding the same path again creates a second artifact (no duplicate warning).
 
 ### Scenarios
 
 **Happy path — professor’s recording**
 
 - **Given** I am in Duke / Competitive Strategies / Lecture Class 1  
-- **When** I choose `lecture-1.m4a` from Downloads  
-- **Then** the artifact appears in the group immediately  
-- **And** its status is “Transcribing”  
+- **When** I open **Import Meeting → Audio files** and choose `lecture-1.m4a`  
+- **Then** the artifact appears in the Files table immediately  
+- **And** its quality shows **Importing** once the worker starts (or **Pending** if another file is already importing)  
 - **And** I can keep using the app
 
 **Phone recording from class**
 
-- **Given** I am in the same meeting group  
-- **When** I add `voice-memo.wav` from my phone’s synced folder  
-- **Then** it appears as a second artifact beside `lecture-1.m4a`  
-- **And** both can transcribe independently
+- **Given** I am in the same meeting group and `lecture-1.m4a` is already importing  
+- **When** I add `voice-memo.wav`  
+- **Then** it appears as a second artifact  
+- **And** it shows **Pending** with an amber row until the first job finishes  
+- **And** I cannot open the pending row in the transcript card
 
 **Unsupported file**
 
-- **Given** I pick `slides.pptx` or `photo.jpg`  
-- **When** I confirm the file picker  
+- **Given** the audio picker only lists audio extensions  
+- **When** a non-audio path is still submitted  
 - **Then** the file is not added  
-- **And** I see that BellaNote needs audio or a transcript file
+- **And** I see that BellaNote needs an audio file
 
-**Video file — DECIDE**
+**Video file**
 
 - **Given** I pick `lecture.mp4`  
 - **When** I add it  
-- **Then** *(proposed)* BellaNote extracts audio only and transcribes that  
-- **Or** rejects video in this slice to keep scope tight
+- **Then** BellaNote rejects it and asks for an audio file
 
 **Duplicate of the same file**
 
 - **Given** `lecture-1.m4a` is already in Lecture Class 1  
 - **When** I add the same path again  
-- **Then** *(proposed)* we allow it as a second artifact only after a “this looks like a duplicate” confirm  
-- **Or** we silently ignore — needs a call
+- **Then** a second artifact is created (a new copy in the library)
 
 **File disappears after pick**
 
 - **Given** I selected a file on a USB drive  
-- **When** the drive is ejected before copy/transcribe finishes  
-- **Then** the artifact is marked failed with “Couldn’t read the file”  
-- **And** I can remove it or try again
+- **When** the drive is ejected before the copy finishes  
+- **Then** the add fails with a readable “Couldn’t read / copy the file” error  
+- **And** if the copy already succeeded, transcription can continue from BellaNote’s copy
 
 **Very large file**
 
-- **Given** I add a 3-hour, 1 GB lecture  
+- **Given** I add a 3-hour lecture  
 - **When** transcription starts  
 - **Then** the UI stays usable  
-- **And** progress does not look frozen (time or percent, even if approximate)
+- **And** the row shows **Importing** with a spinner (no percent)
 
 ---
 
-## US-202 — See transcription complete (or fail) and retry
+## ~~US-202 — See transcription complete (or fail) and retry~~
+
+**Status:** Complete
 
 **As a** student,  
 **I want** to know when an audio file has become a transcript I can read and chat with,  
@@ -483,10 +538,15 @@ Epic 3  Scoped chat
 
 **Acceptance**
 
-- Status values: Queued, Transcribing, Ready, Failed.  
-- Ready artifacts open to the transcript text.  
-- Failed artifacts show a short reason and Retry.  
-- Chat will not silently include artifacts that are not Ready.
+- Internal status values: `queued`, `transcribing`, `ready`, `failed`.  
+- Files table Quality column: **Pending** (queued), **Importing** + spinner (the job that holds the worker), **small** when ready, **Failed** + **Retry** when failed.  
+- Only the currently transcribing file shows Importing. Other waiting uploads show Pending, use an amber row, and cannot be loaded in the transcript card.  
+- Ready artifacts open to the transcript and are eligible for chat.  
+- Failed artifacts can be opened and show a short error plus Retry in the transcript card.  
+- Chat never includes artifacts that are not Ready.  
+- One faster-whisper worker; extra jobs wait on a lock (usually in upload order, not a named FIFO queue).  
+- Quit mid-import marks leftover `queued` / `transcribing` rows as Failed on next launch, with Retry.  
+- Clicking an **Importing** row does not load it in the transcript card. A top-center warning toast says **Please wait, this file is importing** (icon + warning colors), then fades.
 
 ### Scenarios
 
@@ -494,35 +554,46 @@ Epic 3  Scoped chat
 
 - **Given** `lecture-1.m4a` was added  
 - **When** local transcription finishes  
-- **Then** status becomes Ready  
+- **Then** Quality becomes **small**  
 - **And** I can open the transcript  
 - **And** the artifact is eligible for chat
 
 **Failure — unreadable audio**
 
-- **Given** the file is corrupt or silent/unusable  
+- **Given** the file is corrupt or unusable  
 - **When** transcription fails  
-- **Then** status is Failed  
-- **And** I see a human sentence, not a stack trace  
-- **And** Retry is available
+- **Then** Quality is **Failed**  
+- **And** a Retry button is on the row  
+- **And** opening the row shows a human sentence, not a stack trace  
+- **And** Retry queues the same file again
 
 **Quit mid-transcribe**
 
 - **Given** transcription is in progress  
 - **When** I quit the app  
-- **Then** on next launch the artifact is Failed or Queued (not stuck on Transcribing forever)  
-- **And** I can retry
+- **Then** on next launch the row says Failed  
+- **And** Retry starts the import again
 
 **Two files at once**
 
-- **Given** I added two audio files  
-- **When** both are transcribing  
-- **Then** each shows its own status  
+- **Given** I added two audio files one after the other  
+- **When** the first is importing  
+- **Then** the second shows **Pending** and cannot be opened  
+- **And** when the first finishes (ready or failed), the second becomes **Importing**  
 - **And** one failure does not cancel the other
+
+**Click while importing**
+
+- **Given** a row shows **Importing**  
+- **When** I click it  
+- **Then** the transcript card stays on whatever was already open  
+- **And** a warning toast tells me to wait
 
 ---
 
-## US-203 — Import an existing transcript file
+## ~~US-203 — Import an existing transcript file~~
+
+**Status:** Complete
 
 **As a** student,  
 **I want** to add a transcript I already have (Zoom, Teams, or a plain text file) to a meeting group,  
@@ -530,10 +601,11 @@ Epic 3  Scoped chat
 
 **Acceptance**
 
-- From a meeting group I can pick transcript files: `.vtt`, `.srt`, `.txt`, and at least one Zoom/Teams-style export if we can detect it.  
-- Audio is not required.  
-- Imported text is stored as a Ready transcript.  
-- Timestamps are kept when the file has them.
+- From a meeting group, **Import Meeting → Transcript files** opens the same style of drop-zone modal as audio. Click or drop one or more `.vtt`, `.srt`, or `.txt` files.  
+- Zoom / Teams cue files are parsed when they contain `-->` timestamps (typical VTT/SRT). There is no separate DOCX or proprietary export parser.  
+- Audio is not required. Quality shows **Imported**.  
+- Timestamps are kept when the file has them.  
+- Empty files and files over 2 MB of text are rejected with a reason.
 
 ### Scenarios
 
@@ -541,7 +613,7 @@ Epic 3  Scoped chat
 
 - **Given** I am in Lecture Class 1  
 - **When** I import `zoom-export.vtt`  
-- **Then** the artifact appears as Ready (no transcribe wait)  
+- **Then** the artifact appears as **Imported** (no transcribe wait)  
 - **And** I can read the cue text in order  
 - **And** I can include it in chat
 
@@ -559,27 +631,30 @@ Epic 3  Scoped chat
 - **Then** the import is rejected  
 - **And** I am told the file has no text
 
-**Wrong extension, right content — DECIDE**
+**Wrong extension, right content**
 
 - **Given** a Zoom transcript saved as `.txt`  
-- **When** I import it via “Add transcript”  
-- **Then** it is treated as plain text (acceptable)
+- **When** I import it via **Transcript files**  
+- **Then** if the file contains `-->` cues it is parsed as timed text  
+- **And** otherwise it is treated as plain text
 
 **Audio mistaken for transcript**
 
 - **Given** I choose `lecture-1.m4a` in the transcript picker  
 - **When** I confirm  
-- **Then** BellaNote either rejects it or offers “Add as audio instead”
+- **Then** BellaNote rejects it and says it looks like audio
 
 **Huge text file**
 
 - **Given** a 20 MB dump  
 - **When** I import  
-- **Then** *(proposed)* we accept up to a documented cap (e.g. 2 MB of text) and reject above it with a reason
+- **Then** the import is rejected (“That transcript is larger than 2 MB.”)
 
 ---
 
-## US-204 — Open an artifact and see its transcript
+## ~~US-204 — Open an artifact and see its transcript~~
+
+**Status:** Complete
 
 **As a** student,  
 **I want** to click an artifact and read the transcript in a readable layout,  
@@ -587,10 +662,14 @@ Epic 3  Scoped chat
 
 **Acceptance**
 
-- Ready artifacts open in the main workspace.  
-- Title, source type (Audio / Imported), date, and path in the hierarchy are visible.  
-- Long transcripts scroll smoothly.  
-- If audio exists, I can play it (nice-to-have in this slice if cheap; required later).
+- The meeting-group workspace stacks two cards: **Files** and **Transcript**. Both can be open at once.  
+- Files table columns: file title + original filename, date added, quality.  
+- The Transcript card header shows chips for what that file actually has: **Audio** only if `has_audio`, **Transcript** only when status is Ready and text exists. An imported `.vtt` does not get an Audio chip.  
+- Ready and failed rows can be selected (outlined card). Pending rows are amber and not loadable. Importing rows are not loadable; a click shows the wait toast (US-202).  
+- Ready audio artifacts show a static waveform, play/pause, and click-to-seek. A separate rounded timeclock (not docked into the waveform) shows **playhead / total** and a **Follow** label. Clicking anywhere on the timeclock toggles playback↔transcript sync.  
+- Imported transcripts have no waveform.  
+- Long transcripts scroll in the transcript card.  
+- Inline rename (pencil) and delete (trash) sit on each row. **Select multiple** (checkboxes on the right, same slot as edit/delete) appears only while the Files accordion is open.
 
 ### Scenarios
 
@@ -599,29 +678,63 @@ Epic 3  Scoped chat
 - **Given** `zoom-export.vtt` is Ready  
 - **When** I open it  
 - **Then** I see the text in reading order  
-- **And** timestamps display if present
+- **And** timestamps display if present  
+- **And** Quality is **Imported**  
+- **And** the Transcript card shows a **Transcript** chip only
 
-**Open while still transcribing**
+**Open while still importing**
 
-- **Given** `lecture-1.m4a` is Transcribing  
-- **When** I open it  
-- **Then** I see progress, not a fake empty transcript
+- **Given** `lecture-1.m4a` is Importing  
+- **When** I click the row  
+- **Then** the transcript card does not switch to it  
+- **And** a warning toast says to wait
+
+**Pending file is not loadable**
+
+- **Given** a second audio file is Pending  
+- **When** I click that row  
+- **Then** the transcript card does not switch to it
+
+**Play audio**
+
+- **Given** a ready audio artifact is selected  
+- **When** I press play or click the waveform  
+- **Then** playback seeks to that point  
+- **And** the timeclock shows the current playhead and the total length  
+- **And** the matching transcript line highlights if Follow is on
+
+**Toggle Follow from the timeclock**
+
+- **Given** a ready audio artifact is playing  
+- **When** I click the timeclock  
+- **Then** Follow turns off (or on again)  
+- **And** transcript auto-scroll stops when Follow is off
 
 **Rename artifact**
 
-- **Given** the title is `lecture-1.m4a`  
+- **Given** the title is `lecture-1`  
 - **When** I rename it to `Lecture 1 — professor recording`  
-- **Then** the library and chat source list use the new title
+- **Then** the Files table uses the new title  
+- **And** chat uses the new title the next time that file is sent as context
+
+**Select multiple is hidden when Files is collapsed**
+
+- **Given** the Files accordion is open and I can see **Select multiple**  
+- **When** I collapse Files  
+- **Then** that button is gone  
+- **And** multi-select mode is cleared
 
 ---
 
 ## US-205 — Move an artifact to another meeting group
 
+**Status:** Not started
+
 **As a** student,  
 **I want** to move a file I dropped in the wrong group,  
 **so that** organization stays accurate without re-importing.
 
-**Acceptance**
+**Acceptance** *(not built)*
 
 - I can move an artifact to another meeting group (same topic or another topic/org).  
 - Transcript and status travel with it.  
@@ -644,7 +757,9 @@ Epic 3  Scoped chat
 
 ---
 
-## US-206 — Remove an artifact
+## ~~US-206 — Remove an artifact~~
+
+**Status:** Complete
 
 **As a** student,  
 **I want** to remove a file I added by mistake,  
@@ -652,9 +767,12 @@ Epic 3  Scoped chat
 
 **Acceptance**
 
-- Remove asks for confirmation.  
-- *(Proposed)* original disk file is left alone.  
-- Removed artifacts are out of every chat scope immediately.
+- Trash on the file row asks for confirmation.  
+- **Select multiple** puts a checkbox on each row (including pending / importing / failed). **Delete** then confirms “Are you sure you want to delete {N} file(s)?”  
+- Those controls are hidden when the Files accordion is collapsed.  
+- The original file on disk is left alone; BellaNote’s library copy is deleted.  
+- Removed artifacts are out of every chat scope on the next ask.  
+- Removing a pending or importing file deletes the row immediately. A worker that had already started may finish in the background and then have nothing to update.
 
 ### Scenarios
 
@@ -665,18 +783,27 @@ Epic 3  Scoped chat
 - **Then** the group no longer lists it  
 - **And** a topic-scoped chat no longer uses that text
 
-**Remove during transcribe**
+**Remove during import**
 
-- **Given** an audio file is Transcribing  
+- **Given** an audio file is Importing or Pending  
 - **When** I remove it and confirm  
-- **Then** work on that file stops  
-- **And** it is gone from the group
+- **Then** it is gone from the group  
+- **And** a later worker result for that id is ignored because the row is gone
+
+**Remove several files**
+
+- **Given** Lecture Class 1 has three files  
+- **When** I choose Select multiple, check two rows, and confirm Delete  
+- **Then** those two are gone  
+- **And** the third remains
 
 ---
 
 # Epic 3 — Chat with a chosen scope
 
-## US-301 — Provide and store the ChatGPT API token
+## ~~US-301 — Provide and store the ChatGPT API token~~
+
+**Status:** Complete
 
 **As a** student,  
 **I want** to paste the OpenAI API token we will use,  
@@ -684,11 +811,11 @@ Epic 3  Scoped chat
 
 **Acceptance**
 
-- Settings has a single field for an OpenAI API token.  
-- The token is stored in the macOS keychain, not in a plaintext project file.  
-- The field can be replaced or cleared.  
-- Chat is disabled with a clear explanation until a token is saved.  
-- We do not log the token in the UI or in local debug output.
+- Header Settings has a single password field for an OpenAI API token.  
+- The token is stored in the macOS keychain (`com.bellanote.app` / `openai_api_key`), not in a plaintext project file.  
+- The field can be replaced or cleared. When a token is saved, the field shows a masked placeholder.  
+- Chat uses `gpt-4o`. The composer explains that a token is needed until one is saved. Sending without a token opens Settings.  
+- We do not display the stored token.
 
 ### Scenarios
 
@@ -696,7 +823,7 @@ Epic 3  Scoped chat
 
 - **Given** no token is stored  
 - **When** I paste a valid-looking token and save  
-- **Then** Settings shows the token as saved (masked)  
+- **Then** Settings shows the token as saved (masked placeholder)  
 - **And** chat becomes available
 
 **Missing token**
@@ -704,7 +831,7 @@ Epic 3  Scoped chat
 - **Given** no token is stored  
 - **When** I open chat and send a question  
 - **Then** nothing is sent to OpenAI  
-- **And** I am pointed to Settings to add a token
+- **And** Settings opens so I can add a token
 
 **Invalid token**
 
@@ -722,7 +849,9 @@ Epic 3  Scoped chat
 
 ---
 
-## US-302 — Ask a natural-language question at a chosen scope
+## ~~US-302 — Ask a natural-language question at a chosen scope~~
+
+**Status:** Complete
 
 **As a** student,  
 **I want** to ask a question and choose whether BellaNote should use the whole organization, one topic, one meeting group, or one transcript,  
@@ -730,12 +859,13 @@ Epic 3  Scoped chat
 
 **Acceptance**
 
-- Chat has a visible **scope control** with four levels: Organization, Topic category, Meeting group, This transcript.  
-- Scope defaults to wherever I am (if I am inside Lecture Class 1, default is that group).  
-- I can widen or narrow before sending.  
-- Only **Ready** transcripts inside the scope are sent.  
-- If the scope has no Ready transcripts, we do not call the API; we say so.  
-- The model is instructed to answer only from provided transcripts, cite sources, and say when the material does not contain the answer.
+- Chat has a visible scope control: **Org / Topic / Group / This file**.  
+- Default follows the tree: org or topic selection uses that level; a meeting group with no loadable file uses the group; a selected file in a group defaults to **This file**.  
+- I can widen or narrow before sending (unavailable levels are disabled).  
+- Only **Ready** transcripts inside the scope are sent. Audio bytes are never uploaded.  
+- If the scope has no Ready transcripts, we do not call the API; a toast says so.  
+- Context is packed newest-first up to ~110k characters; older ready files can be omitted (see US-305).  
+- The model is instructed to answer only from provided transcripts, cite title + a discrete timestamp, and say when the material does not contain the answer.
 
 ### Scenarios
 
@@ -766,7 +896,7 @@ Epic 3  Scoped chat
 **Single transcript scope**
 
 - **Given** I have `zoom-export.vtt` open  
-- **And** I set scope to **This transcript**  
+- **And** I set scope to **This file**  
 - **When** I ask *“What questions did students ask at the end?”*  
 - **Then** only that file is used
 
@@ -783,7 +913,7 @@ Epic 3  Scoped chat
 - **Given** Lecture Class 1 has one Ready import and one Failed audio  
 - **When** I chat at meeting-group scope  
 - **Then** only the Ready import is used  
-- **And** the UI notes that 1 of 2 artifacts could be included
+- **And** the preview notes ready vs not-ready counts
 
 **Empty question**
 
@@ -809,33 +939,40 @@ Epic 3  Scoped chat
 
 ## US-303 — Read a well-organized answer
 
+**Status:** Partial
+
 **As a** student,  
 **I want** the reply laid out so I can scan it, see sources, and jump back to the file,  
 **so that** I trust the answer and can verify it in the original transcript.
 
 **Acceptance**
 
-- Assistant messages use readable typography (headings, bullets, short paragraphs) — not a raw dump.  
-- Sources appear as a structured list: artifact title, meeting group, topic, and timestamp when we have one.  
-- Clicking a source opens that artifact (and scrolls to a timestamp if we have one).  
-- User question and assistant answer are visually distinct.  
-- Long answers scroll inside the chat column; they do not blow up the library.
+- Assistant messages render GitHub-flavored markdown (headings, lists, quotes, tables) — not a raw dump.  
+- User and assistant bubbles are visually distinct, with a name and timestamp.  
+- While waiting, a thinking bubble shows.  
+- The model is asked to cite `[00:17]` and the artifact title in the prose. Those cites are plain text, not clickable chips.  
+- Long answers scroll inside the chat column.
+
+**Still open**
+
+- No structured source list (title / group / topic / timestamp).  
+- Clicking a citation does not open the artifact or seek the waveform.
 
 ### Scenarios
 
 **Answer with citations**
 
-- **Given** the model cites Lecture Class 1 / `zoom-export.vtt` at `00:17`  
+- **Given** the model cites `zoom-export.vtt` at `[00:17]`  
 - **When** the answer renders  
-- **Then** I see a source chip or footnote I can click  
-- **And** clicking opens that transcript near 00:17 if timestamps exist
+- **Then** I see that citation in the markdown  
+- **And** I open the file myself from the Files table to verify
 
 **Answer with no match**
 
 - **Given** the transcripts do not mention the thing I asked  
 - **When** the answer returns  
 - **Then** it states that clearly  
-- **And** it may suggest widening the scope (e.g. from this group to the whole topic)
+- **And** it may suggest widening or narrowing the scope
 
 **Ugly model markdown**
 
@@ -847,15 +984,22 @@ Epic 3  Scoped chat
 
 ## US-304 — Continue the conversation in the same scope
 
+**Status:** Partial
+
 **As a** student,  
 **I want** to ask a follow-up without restating the whole question,  
 **so that** I can dig in (“who said that?” / “what was the example?”) naturally.
 
 **Acceptance**
 
-- Follow-ups stay in the same thread and keep the current scope unless I change it.  
-- Changing scope mid-thread is visible (a divider or notice: “Scope changed to Topic: Competitive Strategies”).  
-- I can start a new thread so an old tangent does not poison the next exam question.
+- Follow-ups stay in the same locally persisted thread for the current scope (`UNIQUE(scope_type, scope_id)`).  
+- Changing the scope chips loads that scope’s own thread (no in-thread “scope changed” divider).  
+- **New thread** clears the current scope’s thread. The old messages are not kept as a history list.
+
+**Still open**
+
+- No list of recent threads per scope.  
+- New thread replaces the saved thread; it does not archive it.
 
 ### Scenarios
 
@@ -866,29 +1010,31 @@ Epic 3  Scoped chat
 - **Then** the model still only uses Lecture Class 1  
 - **And** it can refer to the previous answer
 
-**Change scope mid-thread**
+**Change scope mid-conversation**
 
 - **Given** I was chatting at Lecture Class 1  
-- **When** I switch scope to Competitive Strategies and send the next message  
-- **Then** that message uses the wider scope  
-- **And** the thread shows that the scope changed
+- **When** I switch scope to Competitive Strategies  
+- **Then** I see that topic’s thread (or an empty one)  
+- **And** the next send uses the wider scope
 
 **New thread**
 
 - **Given** I have a long thread about the midterm  
-- **When** I start a new chat  
+- **When** I click New thread  
 - **Then** the old thread is not sent as context  
-- **And** I can still find the old thread later *(proposed: list of recent threads on this scope)*
+- **And** it is no longer listed
 
 **Thread persistence**
 
 - **Given** I chatted yesterday about Lecture Class 1  
-- **When** I reopen that group today  
-- **Then** *(proposed)* the last thread is still there
+- **When** I reopen that group today and set scope to the group  
+- **Then** the last thread for that scope is still there
 
 ---
 
 ## US-305 — See what will be included before I send (scope preview)
+
+**Status:** Partial
 
 **As a** student,  
 **I want** to see how many transcripts, and which ones, the current scope will use,  
@@ -896,32 +1042,36 @@ Epic 3  Scoped chat
 
 **Acceptance**
 
-- Near the scope control, show a count: e.g. “3 transcripts in Competitive Strategies”.  
-- I can expand the list and see titles + Ready/excluded.  
-- Excluded items (still transcribing, failed, empty) are labeled.
+- Under the scope chips, a count line shows ready / omitted / not-ready, e.g. `3 ready · 1 not ready` or `12 ready · using 8 most recent · 4 omitted`.  
+- Context is newest meeting groups first, packed to about 110k characters of transcript text.  
+- Omitted ready files are mentioned to the model; the UI shows the omitted count.
+
+**Still open**
+
+- The preview is counts only — no expandable list of titles or Ready/excluded labels, even though the API already returns that file list.
 
 ### Scenarios
 
 **Preview before send**
 
-- **Given** Competitive Strategies has 3 Ready artifacts and 1 Transcribing  
+- **Given** Competitive Strategies has 3 Ready artifacts and 1 Importing  
 - **When** I set scope to that topic  
-- **Then** I see “3 ready · 1 not ready”  
-- **And** I can open the list and confirm Lecture Class 1 and 2 are included
+- **Then** I see `3 ready · 1 not ready`
 
 **Org-wide surprise**
 
-- **Given** Duke has 40 Ready transcripts  
+- **Given** Duke has more ready text than the context budget  
 - **When** I set scope to Duke  
-- **Then** the preview shows 40  
-- **And** *(proposed)* if we must cap context, we tell the user we will use the most recent N and list which ones  
-- **DECIDE:** hard cap strategy (most recent by group date vs. ask the user to narrow)
+- **Then** the preview shows how many ready files will be used and how many older ones are omitted  
+- **And** I can narrow the scope if I want a specific lecture included
 
 ---
 
 # Cross-cutting stories
 
-## US-401 — Work stays on this Mac
+## ~~US-401 — Work stays on this Mac~~
+
+**Status:** Complete
 
 **As a** student,  
 **I want** my audio and transcripts to stay on my computer,  
@@ -929,7 +1079,7 @@ Epic 3  Scoped chat
 
 **Acceptance**
 
-- Hierarchy, files, and transcripts are local.  
+- Hierarchy, files, and transcripts live under `~/Library/Application Support/com.bellanote.app/` (`bella.db` + `library/{id}/`).  
 - The only network calls in this slice are OpenAI chat (and only when I send a message).  
 - Audio is not uploaded to OpenAI; we send transcript text (and only for the chosen scope).
 
@@ -943,7 +1093,9 @@ Epic 3  Scoped chat
 
 ---
 
-## US-402 — The workspace looks like BellaNote
+## ~~US-402 — The workspace looks like BellaNote~~
+
+**Status:** Complete
 
 **As a** student,  
 **I want** the app to feel simple and beautiful,  
@@ -951,10 +1103,12 @@ Epic 3  Scoped chat
 
 **Acceptance**
 
-- Library on one side, reading / chat on the other.  
-- Chat output is a first-class pane, not a cramped modal.  
+- Three panes: Library | Transcript workspace | Chat.  
+- Library, transcript, and chat each collapse to a vertical rail. Collapse state persists. When the transcript rail is collapsed, Chat grows; when Chat is collapsed, the transcript takes the leftover space.  
+- Chat is a first-class pane, not a modal.  
 - Empty states teach the next click.  
-- Light and dark (or the POC dark default) do not make text unreadable.
+- Dark charcoal / mint glass is the shipped theme (no light theme in this slice).  
+- Meeting-group workspace uses stacked Files and Transcript cards, not a single dump. The Transcript header uses Audio / Transcript chips instead of a static “Audio + transcript” label.
 
 ### Scenarios
 
@@ -966,40 +1120,48 @@ Epic 3  Scoped chat
 
 **Chat + transcript together**
 
-- **Given** I am reading `zoom-export.vtt` and chatting at This transcript  
-- **When** an answer cites a line  
+- **Given** I am reading `zoom-export.vtt` and chatting at This file  
+- **When** an answer arrives  
 - **Then** I can see the transcript and the answer without losing my place
 
+**Collapse chat**
+
+- **Given** Chat is open  
+- **When** I collapse it  
+- **Then** it becomes a Chat rail  
+- **And** the transcript workspace uses the extra width
+
 ---
 
-# Open decisions (please comment)
+# Decisions (resolved in this slice)
 
-| # | Decision | Proposed default | Why it matters |
+| # | Decision | Shipped | Notes |
 |---|---|---|---|
-| D1 | Must every topic live under an organization? | **Yes, for this slice** | Matches Duke. Unfiled topics can wait. |
-| D2 | Must every meeting group live under a topic? | **Yes, for this slice** | Same reason. |
-| D3 | Duplicate names in the same parent | **Block for org and topic; allow for meeting groups if dates differ** | Classes repeat; orgs should not. |
-| D4 | Delete original files on disk? | **Never** | We organize copies/references, not the user’s Downloads folder. |
-| D5 | Video (`mp4`) in this slice | **Reject, ask for audio** | Keeps ingest small. Extract-audio can be next. |
-| D6 | Undo after delete | **No undo; confirm instead** | Faster to ship. POC had undo — we can match it if you want. |
-| D7 | Org-wide chat when there are dozens of transcripts | **Warn + use most recent N (e.g. 20), show which** | Context windows are real. |
-| D8 | Playback of source audio in this slice | **Nice-to-have if the POC playback ports cheaply; not blocking** | Chat and read-first. |
-| D9 | Persist chat threads per scope | **Yes, locally** | Students will come back the night before the midterm. |
-| D10 | Independent org/topic tags (from product scope) | **Not in this slice** | This slice is a real tree: Org → Topic → Group → Artifact. |
+| D1 | Must every topic live under an organization? | **Yes** | Unfiled topics are out. |
+| D2 | Must every meeting group live under a topic? | **Yes** | Same tree. |
+| D3 | Duplicate names in the same parent | **Block org and topic (case-insensitive); allow meeting groups** | Groups are distinguished by date. |
+| D4 | Delete original files on disk? | **Never** | Only BellaNote copies under Application Support are removed. |
+| D5 | Video (`mp4`) in this slice | **Reject, ask for audio** | Extract-audio can be next. |
+| D6 | Undo after delete | **No undo; confirm instead** | Confirm always, including empty containers. |
+| D7 | Org-wide chat when there are dozens of transcripts | **Newest groups first, ~110k character budget, show omitted count** | Expandable file list is still open (US-305). |
+| D8 | Playback of source audio | **Shipped** | Static waveform, click-to-seek, playhead/total timeclock, Follow on the clock. |
+| D9 | Persist chat threads per scope | **Yes — one thread per scope** | New thread replaces; no archive list (US-304). |
+| D10 | Independent org/topic tags (from product scope) | **Not in this slice** | Real tree: Org → Topic → Group → Artifact. |
 
 ---
 
-# Suggested build order
+# Suggested next work
 
-1. **US-101 → US-105** — empty Mac app, tree, browse, persist  
-2. **US-106, US-107** — rename / delete with confirmations  
-3. **US-201, US-202** — audio add + local transcribe + status  
-4. **US-203, US-204** — import transcript + reader  
-5. **US-205, US-206** — move / remove  
-6. **US-301** — keychain token  
-7. **US-305 then US-302 → US-304** — preview, ask, layout, follow-up  
+Shipped: US-101–107, US-201–204, US-206, US-301, US-302, US-401, US-402.
 
-That order means you can comment on hierarchy and file edges before we spend time on chat formatting.
+Still open from this slice:
+
+1. **US-205** — Move an artifact to another meeting group  
+2. **US-303** — Clickable citations that open the artifact / seek  
+3. **US-304** — Thread archive / list of recent threads  
+4. **US-305** — Expandable scope-preview file list  
+
+Then the product-scope work that was always out of this slice: live capture, Windows, summaries, tasks, YouTube, sharing.
 
 ---
 
