@@ -48,7 +48,11 @@ let listening = false;
 export async function installArtifactListeners() {
   if (listening) return;
   listening = true;
-  await listen<string>("artifact-updated", () => {
-    void useArtifactStore.getState().refresh();
-  });
+  try {
+    await listen<string>("artifact-updated", () => {
+      void useArtifactStore.getState().refresh();
+    });
+  } catch {
+    listening = false;
+  }
 }
