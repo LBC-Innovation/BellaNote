@@ -160,7 +160,7 @@ Use the titlebar layout buttons to show only Library, only Transcript, or only C
 ### Prerequisites
 
 - macOS with **Xcode Command Line Tools**
-- **Node 20+**
+- **Node 22+** (Release CI uses Node 24)
 - **Rust** via [rustup](https://rustup.rs/)
 - **Python 3** for `npm run tauri:dev` only (Homebrew’s interpreter is “externally managed” — use a venv). Installers bundle their own worker.
 
@@ -204,7 +204,7 @@ npm run tauri:build
 
 The installer lands at `src-tauri/target/release/bundle/dmg/`. Open the `.dmg`, drag **BellaNote** into Applications, then launch it from there.
 
-The first launch of an unsigned build is blocked by Gatekeeper. Right-click the app → **Open** → **Open**.
+A build made on this Mac usually opens without Gatekeeper. A `.dmg` copied from GitHub or another machine will not — see the signing section below.
 
 Python and faster-whisper are frozen into the app. The person who installs the `.dmg` does not install those dependencies. The first audio import downloads the `small.en` model into Application Support; after that, transcription stays on device.
 
@@ -222,7 +222,15 @@ If the job cannot create a release, set the repo **Actions** workflow permission
 
 **Current choice: ship unsigned `.dmg` files.** This prototype does not use an Apple Developer Program membership. A paid Developer ID certificate is not required to share a build with a small tester group.
 
-Testers install the matching `.dmg` (Apple Silicon vs Intel), drag BellaNote into Applications, then **right-click → Open → Open** the first time. Gatekeeper blocks unsigned downloads; that second Open is the workaround. Skip notarization until you want “double-click and it just works” for people you do not sit next to.
+Testers install the matching `.dmg` (Apple Silicon vs Intel) and drag BellaNote into Applications. **Do not move it to the Trash.** On current macOS (Sequoia / 26), Gatekeeper no longer offers **right-click → Open** for an unsigned download. It shows **“BellaNote is damaged and can’t be opened”** instead. That message is quarantine, not a broken `.dmg`.
+
+Clear the quarantine flag, then open the app normally:
+
+```bash
+xattr -cr /Applications/BellaNote.app
+```
+
+Sharing over AirDrop or a USB stick usually skips quarantine. Skip notarization until you want “double-click and it just works” for people you do not sit next to.
 
 **Do not create empty Apple signing secrets.** Tauri treats a *present* `APPLE_CERTIFICATE` environment variable as “import this certificate,” even when the value is `""`. GitHub Actions turns a missing secret into an empty string (not unset), so the old workflow failed at `security import` / `SecKeychainItemImport` after a successful compile, and no `.dmg` was uploaded. The Release workflow now exports `APPLE_*` only when `APPLE_CERTIFICATE` is actually set.
 
