@@ -5,6 +5,7 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
+use tauri::{AppHandle, Manager};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct TranscriptSegment {
@@ -34,15 +35,53 @@ pub struct Transcriber {
     inner: Arc<Mutex<TranscribeProcess>>,
 }
 
+fn host_triple() -> &'static str {
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    {
+        "aarch64-apple-darwin"
+    }
+    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    {
+        "x86_64-apple-darwin"
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        "unknown"
+    }
+}
+
+fn sidecar_path() -> Option<PathBuf> {
+    if let Ok(p) = std::env::var("ECHO_TRANSCRIBE_SIDECAR") {
+        let path = PathBuf::from(p);
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+    if cfg!(debug_assertions) {
+        return None;
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let next_to_app = dir.join("transcribe-worker");
+            if next_to_app.is_file() {
+                return Some(next_to_app);
+            }
+        }
+    }
+    let packaged = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("binaries")
+        .join(format!("transcribe-worker-{}", host_triple()));
+    if packaged.is_file() {
+        return Some(packaged);
+    }
+    None
+}
+
 fn worker_script_path() -> PathBuf {
     if let Ok(p) = std::env::var("ECHO_TRANSCRIBE_SCRIPT") {
         return PathBuf::from(p);
     }
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../scripts/transcribe_worker.py")
-}
-
-pub fn whisper_model() -> String {
-    std::env::var("WHISPER_MODEL").unwrap_or_else(|_| "small.en".to_string())
 }
 
 fn default_python() -> PathBuf {
@@ -56,30 +95,50 @@ fn default_python() -> PathBuf {
     PathBuf::from("python3")
 }
 
-impl Transcriber {
-    pub fn new() -> Result<Self> {
-        let python = default_python();
+pub fn whisper_model() -> String {
+    std::env::var("WHISPER_MODEL").unwrap_or_else(|_| "small.en".to_string())
+}
+
+fn whisper_download_root(app: &AppHandle) -> Option<PathBuf> {
+    let dir = app.path().app_data_dir().ok()?.join("whisper-models");
+    std::fs::create_dir_all(&dir).ok()?;
+    Some(dir)
+}
+
+fn apply_worker_args(cmd: &mut Command, app: &AppHandle) {
+    cmd.arg("--model").arg(whisper_model());
+    if let Some(root) = whisper_download_root(app) {
+        cmd.arg("--download-root").arg(root);
+    }
+}
+
+fn spawn_worker(app: &AppHandle) -> Result<Child> {
+    let mut cmd = if let Some(sidecar) = sidecar_path() {
+        Command::new(sidecar)
+    } else if cfg!(debug_assertions) {
         let script = worker_script_path();
-        let model = whisper_model();
         if !script.is_file() {
             anyhow::bail!("transcribe worker not found at {:?}", script);
         }
+        let mut cmd = Command::new(default_python());
+        cmd.arg(script);
+        cmd
+    } else {
+        anyhow::bail!(
+            "The bundled transcription worker is missing from this build. Rebuild with npm run tauri:build."
+        );
+    };
+    apply_worker_args(&mut cmd, app);
+    cmd.stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .context("failed to start the transcription worker")
+}
 
-        let mut child = Command::new(&python)
-            .arg(&script)
-            .arg("--model")
-            .arg(&model)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .with_context(|| {
-                format!(
-                    "failed to spawn {:?} (create .venv or set ECHO_PYTHON)",
-                    python
-                )
-            })?;
-
+impl Transcriber {
+    pub fn new(app: &AppHandle) -> Result<Self> {
+        let mut child = spawn_worker(app)?;
         let stdout = BufReader::new(child.stdout.take().context("no stdout")?);
         let stdin = BufWriter::new(child.stdin.take().context("no stdin")?);
         let mut proc = TranscribeProcess {

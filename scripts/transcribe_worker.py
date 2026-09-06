@@ -36,6 +36,11 @@ def main() -> None:
         default="small.en",
         help="Model size (e.g. tiny.en, base.en, small.en) or path to a CTranslate2 model directory",
     )
+    p.add_argument(
+        "--download-root",
+        default=None,
+        help="Directory where Whisper models are downloaded and cached",
+    )
     args = p.parse_args()
 
     try:
@@ -53,11 +58,13 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        model = WhisperModel(
-            args.model,
-            device="auto",
-            compute_type="auto",
-        )
+        model_kwargs = {
+            "device": "auto",
+            "compute_type": "auto",
+        }
+        if args.download_root:
+            model_kwargs["download_root"] = args.download_root
+        model = WhisperModel(args.model, **model_kwargs)
     except Exception as e:
         print(json.dumps({"error": "failed to load model", "detail": str(e)}), flush=True)
         sys.exit(1)
