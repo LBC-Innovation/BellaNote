@@ -1,6 +1,6 @@
 [package]
 name = "bellanote"
-version = "0.1.0-beta.1"
+version = "0.1.0-beta.2"
 description = "BellaNote — beautiful local-first meeting notes"
 authors = ["LBC Innovation"]
 edition = "2021"
@@ -26,6 +26,7 @@ uuid = { version = "1", features = ["v4"] }
 thiserror = "2"
 keyring = { version = "3", features = ["apple-native"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+symphonia = { version = "0.5", default-features = false, features = ["aac", "adpcm", "flac", "isomp4", "mkv", "mp3", "ogg", "pcm", "vorbis", "wav"] }
 
 [profile.release]
 codegen-units = 1

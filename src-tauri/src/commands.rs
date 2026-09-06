@@ -1,4 +1,5 @@
 use crate::artifacts;
+use crate::audio_peaks::{self, AudioPeaksResult};
 use crate::chat::{self, ChatThreadView, ScopePreview};
 use crate::db::{
     Artifact, ArtifactComment, LibraryOrganization, MeetingGroup, Organization, Topic,
@@ -159,12 +160,32 @@ pub fn rename_artifact(state: State<'_, Arc<AppState>>, args: RenameArgs) -> App
 pub fn delete_artifact(app: AppHandle, state: State<'_, Arc<AppState>>, args: IdArgs) -> AppResult<()> {
     state.db.delete_artifact(&args.id)?;
     artifacts::delete_artifact_files(&app, &args.id);
+    audio_peaks::invalidate_artifact(&args.id);
     Ok(())
 }
 
 #[tauri::command]
 pub fn get_artifact_audio_path(app: AppHandle, args: IdArgs) -> AppResult<Option<String>> {
     Ok(artifacts::find_audio_path(&app, &args.id).map(|p| p.to_string_lossy().into_owned()))
+}
+
+#[tauri::command]
+pub async fn get_artifact_audio_peaks(app: AppHandle, args: IdArgs) -> AppResult<AudioPeaksResult> {
+    let path = artifacts::find_audio_path(&app, &args.id).ok_or_else(|| {
+        crate::error::AppError::Message("The original audio is missing.".into())
+    })?;
+    let cache_key = audio_peaks::cache_key(&args.id, &path)?;
+    if let Some(cached) = audio_peaks::get_cached(&cache_key) {
+        return Ok(cached);
+    }
+    let result = tokio::task::spawn_blocking(move || {
+        audio_peaks::compute_audio_peaks(&path, audio_peaks::PEAK_BUCKETS)
+    })
+    .await
+    .map_err(|e| crate::error::AppError::Message(e.to_string()))?
+    .map_err(crate::error::AppError::from)?;
+    audio_peaks::put_cached(cache_key, result.clone());
+    Ok(result)
 }
 
 #[tauri::command]

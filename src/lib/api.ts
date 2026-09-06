@@ -82,6 +82,15 @@ export function getArtifactAudioPath(id: string) {
   return invoke<string | null>("get_artifact_audio_path", { args: { id } });
 }
 
+export type AudioPeaks = {
+  peaks: number[];
+  durationSecs: number;
+};
+
+export function getArtifactAudioPeaks(id: string) {
+  return invoke<AudioPeaks>("get_artifact_audio_peaks", { args: { id } });
+}
+
 export function listArtifactComments(artifactId: string) {
   return invoke<ArtifactComment[]>("list_artifact_comments", { args: { artifactId } });
 }

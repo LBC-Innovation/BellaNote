@@ -42,6 +42,7 @@ fn main() {
             "delete_artifact",
             "retry_artifact",
             "get_artifact_audio_path",
+            "get_artifact_audio_peaks",
             "list_artifact_comments",
             "create_artifact_comment",
             "update_artifact_comment",

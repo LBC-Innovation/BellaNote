@@ -28,6 +28,7 @@
     "allow-delete-artifact",
     "allow-retry-artifact",
     "allow-get-artifact-audio-path",
+    "allow-get-artifact-audio-peaks",
     "allow-list-artifact-comments",
     "allow-create-artifact-comment",
     "allow-update-artifact-comment",

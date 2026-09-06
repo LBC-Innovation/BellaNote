@@ -1,4 +1,5 @@
 mod artifacts;
+mod audio_peaks;
 mod chat;
 mod commands;
 mod db;
@@ -61,6 +62,7 @@ pub fn run() {
             commands::delete_artifact,
             commands::retry_artifact,
             commands::get_artifact_audio_path,
+            commands::get_artifact_audio_peaks,
             commands::list_artifact_comments,
             commands::create_artifact_comment,
             commands::update_artifact_comment,
