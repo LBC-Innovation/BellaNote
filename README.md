@@ -204,8 +204,6 @@ npm run tauri:build
 
 The installer lands at `src-tauri/target/release/bundle/dmg/`. Open the `.dmg`, drag **BellaNote** into Applications, then launch it from there.
 
-A build made on this Mac usually opens without Gatekeeper. A `.dmg` copied from GitHub or another machine will not — see the signing section below.
-
 Python and faster-whisper are frozen into the app. The person who installs the `.dmg` does not install those dependencies. The first audio import downloads the `small.en` model into Application Support; after that, transcription stays on device.
 
 ### GitHub Releases
@@ -214,45 +212,19 @@ The **Release** workflow (`.github/workflows/release.yml`) freezes the whisper w
 
 1. Keep `version` in sync in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`.
 2. Either push a tag that matches `tauri.conf.json` (`git tag v0.1.0-beta.2 && git push origin v0.1.0-beta.2`) or run **Actions → Release → Run workflow**. The draft tag is always `v` plus the version in `tauri.conf.json` (`v__VERSION__`).
-3. When both macOS jobs finish, open the draft release, download the `.dmg` that matches the Mac, and publish the release when you are ready.
+3. When both macOS jobs finish, open the draft release (the **Releases** page, not “Create a new release”), download the `.dmg` that matches the Mac, and publish when you are ready.
 
 If the job cannot create a release, set the repo **Actions** workflow permission to **Read and write**.
 
-### Signing decision — unsigned early beta
+### Signing and notarization
 
-**Current choice: ship unsigned `.dmg` files.** This prototype does not use an Apple Developer Program membership. A paid Developer ID certificate is not required to share a build with a small tester group.
+GitHub Releases are signed and notarized with a **Developer ID Application** certificate. Installers from the Releases page should open after dragging BellaNote into Applications.
 
-Testers install the matching `.dmg` (Apple Silicon vs Intel) and drag BellaNote into Applications. **Do not move it to the Trash.** On current macOS (Sequoia / 26), Gatekeeper no longer offers **right-click → Open** for an unsigned download. It shows **“BellaNote is damaged and can’t be opened”** instead. That message is quarantine, not a broken `.dmg`.
+Account, certificate, Keychain trust, and GitHub Actions secrets: [`documentation/APPLE_CODE_SIGNING.md`](./documentation/APPLE_CODE_SIGNING.md).
 
-Clear the quarantine flag, then open the app normally:
+**Do not create empty Apple signing secrets.** Tauri treats a *present* `APPLE_CERTIFICATE` as “import this certificate,” even when the value is `""`.
 
-```bash
-xattr -cr /Applications/BellaNote.app
-```
-
-Sharing over AirDrop or a USB stick usually skips quarantine. Skip notarization until you want “double-click and it just works” for people you do not sit next to.
-
-**Do not create empty Apple signing secrets.** Tauri treats a *present* `APPLE_CERTIFICATE` environment variable as “import this certificate,” even when the value is `""`. GitHub Actions turns a missing secret into an empty string (not unset), so the old workflow failed at `security import` / `SecKeychainItemImport` after a successful compile, and no `.dmg` was uploaded. The Release workflow now exports `APPLE_*` only when `APPLE_CERTIFICATE` is actually set.
-
-#### When you enroll as an Apple developer
-
-After joining the Apple Developer Program (~$99/year) and creating a **Developer ID Application** certificate:
-
-1. Export the certificate as a `.p12`, then base64-encode it.
-2. Add these repository secrets (Settings → Secrets and variables → Actions). Leave them unset until every value is real:
-
-   | Secret | What it is |
-   | ------ | ---------- |
-   | `APPLE_CERTIFICATE` | Base64-encoded `.p12` |
-   | `APPLE_CERTIFICATE_PASSWORD` | Password for that `.p12` |
-   | `APPLE_SIGNING_IDENTITY` | Exact name of the Developer ID identity in Keychain |
-   | `APPLE_ID` | Apple ID email used for notarization |
-   | `APPLE_PASSWORD` | App-specific password for that Apple ID |
-   | `APPLE_TEAM_ID` | 10-character Team ID |
-
-3. Re-run **Actions → Release**. The “Export Apple signing secrets” step will start writing those variables, and Tauri will sign and notarize. No workflow edit is required once the secrets exist.
-
-Until those secrets are in place, every Release job should log `No Apple Developer certificate — building an unsigned .dmg.` and still attach installers.
+Official reference: [Tauri macOS code signing](https://v2.tauri.app/distribute/sign/macos/).
 
 ### Environment
 
