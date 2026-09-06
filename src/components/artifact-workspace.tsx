@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ImportDropDialog } from "@/components/import-drop-dialog";
 import { StaticWaveform } from "@/components/static-waveform";
+import { forgetWaveformPeaks, loadWaveformPeaks, peekWaveformPeaks } from "@/lib/waveformPeaks";
 import { WorkspaceCard } from "@/components/workspace-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,28 +25,6 @@ import { formatTimestamp, parseSegments } from "@/lib/segments";
 import { cn } from "@/lib/utils";
 import { useArtifactStore } from "@/store/useArtifactStore";
 import type { Artifact, ArtifactComment } from "@/lib/types";
-
-async function peaksFromUrl(url: string): Promise<number[]> {
-  const response = await fetch(url);
-  const buffer = await response.arrayBuffer();
-  const ctx = new AudioContext();
-  const decoded = await ctx.decodeAudioData(buffer.slice(0));
-  const channel = decoded.getChannelData(0);
-  const bars = 180;
-  const windowSize = Math.max(1, Math.floor(channel.length / bars));
-  const peaks: number[] = [];
-  for (let i = 0; i < bars; i++) {
-    let max = 0;
-    const start = i * windowSize;
-    for (let j = start; j < start + windowSize && j < channel.length; j++) {
-      max = Math.max(max, Math.abs(channel[j]));
-    }
-    peaks.push(max);
-  }
-  await ctx.close();
-  const peak = Math.max(...peaks, 0.001);
-  return peaks.map((value) => value / peak);
-}
 
 function hasTranscriptContent(artifact: Artifact) {
   return artifact.status === "ready" && Boolean(artifact.transcript.trim());
@@ -445,6 +424,7 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
         onConfirm={async () => {
           if (!remove) return;
           await api.deleteArtifact(remove.id);
+          forgetWaveformPeaks(remove.id);
           await load(groupId);
         }}
       />
@@ -460,6 +440,7 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
           try {
             for (const id of ids) {
               await api.deleteArtifact(id);
+              forgetWaveformPeaks(id);
             }
             setSelectedIds([]);
             setSelecting(false);
@@ -1105,6 +1086,7 @@ function ArtifactDetail({
   const lineRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [peaks, setPeaks] = useState<number[]>([]);
+  const [waveformFailed, setWaveformFailed] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -1137,7 +1119,9 @@ function ArtifactDetail({
   useEffect(() => {
     let cancelled = false;
     setAudioUrl(null);
-    setPeaks([]);
+    const cachedPeaks = artifact.hasAudio ? peekWaveformPeaks(artifact.id) : undefined;
+    setPeaks(cachedPeaks?.peaks ?? []);
+    setWaveformFailed(false);
     setProgress(0);
     setCurrentTimeMs(0);
     setPlaying(false);
@@ -1145,16 +1129,19 @@ function ArtifactDetail({
     setAudioDurationMs(artifact.durationMs);
     playheadMsRef.current = 0;
     if (!artifact.hasAudio) return;
-    void api.getArtifactAudioPath(artifact.id).then(async (path) => {
+    void api.getArtifactAudioPath(artifact.id).then((path) => {
       if (!path || cancelled) return;
-      const url = convertFileSrc(path);
-      setAudioUrl(url);
-      try {
-        setPeaks(await peaksFromUrl(url));
-      } catch {
-        setPeaks([]);
-      }
+      setAudioUrl(convertFileSrc(path));
     });
+    void loadWaveformPeaks(artifact.id)
+      .then((result) => {
+        if (cancelled) return;
+        if (result.peaks.length > 0) setPeaks(result.peaks);
+        else setWaveformFailed(true);
+      })
+      .catch(() => {
+        if (!cancelled) setWaveformFailed(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -1287,7 +1274,7 @@ function ArtifactDetail({
             />
           ) : (
             <div className="flex h-8 items-center rounded-2xl bg-black/20 px-4 text-sm text-muted-foreground">
-              Preparing waveform…
+              {waveformFailed ? "Couldn’t build waveform — playback still works." : "Preparing waveform…"}
             </div>
           )}
           <PlaybackToolbar
