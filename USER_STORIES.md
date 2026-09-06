@@ -1,11 +1,11 @@
 # BellaNote — First-slice user stories
 
 **Document status:** First Mac slice implemented — stories rewritten to the shipped app, not the original draft  
-**Last review:** 6 September 2026 (layout focus buttons + pane animation, player toolbar / speed, transcript search)  
-**Platform:** macOS desktop app (Tauri 2)  
-**Slice goal:** A student (or anyone with a similar hierarchy) can create an organization and topic categories, file audio and existing transcripts into meeting groups, and ask natural-language questions against a chosen scope.
+**Last review:** 6 September 2026 (record meeting: microphone + macOS system audio)  
+**Platform:** macOS desktop app (Tauri 2); microphone also runs on Windows, system audio does not  
+**Slice goal:** A student (or anyone with a similar hierarchy) can create an organization and topic categories, file audio and existing transcripts into meeting groups, record from the microphone (or system + mic on a Mac), and ask natural-language questions against a chosen scope.
 
-This slice is narrower than the full [`PRODUCT_SCOPE.md`](./PRODUCT_SCOPE.md). Live microphone / system-audio capture, Windows, summaries, task extraction, and a sharing backend are **out**. The Duke example below is the north-star walkthrough.
+This slice is narrower than the full [`PRODUCT_SCOPE.md`](./PRODUCT_SCOPE.md). Windows system-audio loopback, summaries, task extraction, and a sharing backend are **out**. The Duke example below is the north-star walkthrough.
 
 ---
 
@@ -67,14 +67,16 @@ Duke                          ← Organization
 
 | In (shipped unless noted) | Out |
 |---|---|
-| Launch on Mac | Windows |
-| Create / rename / delete org, topic, meeting group | Live mic or system+meeting capture |
-| Upload one or more audio files → one-shot `small.en` on device; queue extras | YouTube URL ingest |
-| Import one or more `.vtt` / `.srt` / `.txt` | Audience-aware summaries, task extraction |
+| Launch on Mac | Windows system-audio (WASAPI) loopback |
+| Create / rename / delete org, topic, meeting group | YouTube URL ingest |
+| Record microphone (Mac and Windows) | Audience-aware summaries, task extraction |
+| Record system + mic on macOS (ScreenCaptureKit audio + cpal mic) | Sharing / multi-user backend |
+| Upload one or more audio files → one-shot `small.en` on device; queue extras | Calendar, speaker diarization |
+| Import one or more `.vtt` / `.srt` / `.txt` | Mobile |
 | View artifacts in the hierarchy; remove one or many with confirm | Move an artifact between groups (US-205, not started) |
-| Static waveform + click-to-seek; play / Follow / speed / clock under the waveform; search filters transcript lines | Sharing / multi-user backend |
-| ChatGPT (`gpt-4o`) with an explicit scope | Calendar, speaker diarization |
-| User-provided OpenAI API token in the keychain | Mobile |
+| Static waveform + click-to-seek; play / Follow / speed / clock under the waveform; search filters transcript lines | |
+| ChatGPT (`gpt-4o`) with an explicit scope | |
+| User-provided OpenAI API token in the keychain | |
 
 ---
 
@@ -98,6 +100,8 @@ Epic 2  Files & transcripts
         US-205  Re-file / move an artifact                 Not started
         ~~US-206  Remove an artifact~~                      Complete
         ~~US-207  Search within a transcript~~              Complete
+        ~~US-209  Record from the microphone~~              Complete
+        ~~US-210  Record system audio + microphone~~        Complete
         US-208  Leave a timed comment on audio             Not started
 
 Epic 3  Scoped chat
@@ -790,7 +794,8 @@ Epic 3  Scoped chat
 - Trash on the file row asks for confirmation.  
 - **Select multiple** puts a checkbox on each row (including pending / importing / failed). **Delete** then confirms “Are you sure you want to delete {N} file(s)?”  
 - Those controls are hidden when the Files accordion is collapsed.  
-- The original file on disk is left alone; BellaNote’s library copy is deleted.  
+- The confirm dialog can also delete the audio on disk: a checkbox “Also delete the original audio file” (imports) or “Also delete the audio file from this computer” (recordings). Off by default.  
+- If that box is left unchecked, BellaNote’s library copy is still removed for imported files; the original in Downloads (or wherever you picked it) stays. Recordings stay on disk in the library until the box is checked.  
 - Removed artifacts are out of every chat scope on the next ask.  
 - Removing a pending or importing file deletes the row immediately. A worker that had already started may finish in the background and then have nothing to update.
 
@@ -856,6 +861,74 @@ Epic 3  Scoped chat
 - **Given** the list is filtered  
 - **When** I clear the search  
 - **Then** every line is visible again
+
+---
+
+## ~~US-209 — Record from the microphone~~
+
+**Status:** Complete
+
+**As a** student in a live discussion,  
+**I want** to record from this computer’s microphone into the current meeting group,  
+**so that** I get an on-device transcript without importing a file afterwards.
+
+**Acceptance**
+
+- Next to **Import Meeting**, **Record Meeting** opens a dropdown: **Microphone** / **System audio**.  
+- **Microphone** starts capture immediately on the default input (`cpal`). macOS asks for Microphone permission the first time.  
+- One recording at a time. While it runs, Import Meeting is disabled and the control becomes **Stop · MM:SS**.  
+- A new artifact appears in Files with status **Recording**. Chunks of transcript may appear while capturing. Stop is instant; trailing Whisper work may still finish.  
+- The recording is stored as `library/{id}/source.wav` and plays like an imported audio file once Ready. Microphone-only is 16 kHz dual-mono; system + mic is 48 kHz stereo.  
+- Closing BellaNote mid-record marks the row Failed.
+
+### Scenarios
+
+**Happy path**
+
+- **Given** Lecture Class 1 is selected  
+- **When** I choose **Record Meeting → Microphone** and speak, then Stop  
+- **Then** a microphone recording artifact is in the Files list  
+- **And** it becomes Ready with a transcript and waveform
+
+**Already recording**
+
+- **Given** a recording is in progress  
+- **When** I try to start another  
+- **Then** BellaNote keeps the first one and does not start a second
+
+---
+
+## ~~US-210 — Record system audio and the microphone~~
+
+**Status:** Complete (macOS). Windows system audio is stubbed.
+
+**As a** person in a virtual meeting,  
+**I want** BellaNote to capture what I hear and what I say on one timeline,  
+**so that** I do not need a virtual audio cable or a meeting bot.
+
+**Acceptance**
+
+- **Record Meeting → System audio** on macOS captures display audio via ScreenCaptureKit and the microphone via `cpal`, mixed with gain staging and a soft limiter.  
+- macOS asks for Screen Recording (system audio) and Microphone. BellaNote does not save video.  
+- On Windows, choosing System audio does not start capture; a message says it is not available yet. Microphone still works.  
+- While recording, a short consent line is visible: you are capturing audio on this device.  
+- Mixed audio is one 48 kHz stereo `source.wav` (system L/R preserved; mic centered). Whisper still transcribes a 16 kHz mono downmix.
+
+### Scenarios
+
+**Virtual meeting on a Mac**
+
+- **Given** Lecture Class 1 is selected and Zoom is playing  
+- **When** I choose **Record Meeting → System audio**, speak, then Stop  
+- **Then** the artifact contains meeting playback mixed with my voice  
+- **And** the transcript covers both
+
+**Windows system audio**
+
+- **Given** I am on Windows  
+- **When** I choose **Record Meeting → System audio**  
+- **Then** recording does not start  
+- **And** I see that system audio is not available on Windows yet
 
 ---
 
@@ -1270,7 +1343,7 @@ Epic 3  Scoped chat
 | D1 | Must every topic live under an organization? | **Yes** | Unfiled topics are out. |
 | D2 | Must every meeting group live under a topic? | **Yes** | Same tree. |
 | D3 | Duplicate names in the same parent | **Block org and topic (case-insensitive); allow meeting groups** | Groups are distinguished by date. |
-| D4 | Delete original files on disk? | **Never** | Only BellaNote copies under Application Support are removed. |
+| D4 | Delete original files on disk? | **Optional, off by default** | Confirm dialog checkbox. BellaNote library copies of imports are still removed; recordings stay on disk unless the box is checked. |
 | D5 | Video (`mp4`) in this slice | **Reject, ask for audio** | Extract-audio can be next. |
 | D6 | Undo after delete | **No undo; confirm instead** | Confirm always, including empty containers. |
 | D7 | Org-wide chat when there are dozens of transcripts | **Newest groups first, ~110k character budget, show omitted count** | Expandable file list is still open (US-305). |
@@ -1282,7 +1355,7 @@ Epic 3  Scoped chat
 
 # Suggested next work
 
-Shipped: US-101–107, US-201–204, US-206, US-207, US-301, US-302, US-401, US-402.
+Shipped: US-101–107, US-201–204, US-206, US-207, US-209, US-210, US-301, US-302, US-401, US-402.
 
 Still open from this slice:
 
@@ -1292,7 +1365,7 @@ Still open from this slice:
 4. **US-304** — Thread archive / list of recent threads  
 5. **US-305** — Expandable scope-preview file list  
 
-Then the product-scope work that was always out of this slice: live capture, Windows, summaries, tasks, YouTube, sharing.
+Then the product-scope work that was always out of this slice: Windows WASAPI system audio, summaries, tasks, YouTube, sharing.
 
 ---
 
@@ -1305,6 +1378,7 @@ Then the product-scope work that was always out of this slice: live capture, Win
 | Meeting groups = Lecture Class 1 / 2, Mid Term Study Session | US-104 |
 | Upload audio provided after the fact | US-201, US-202 |
 | Recordings I made while I was there (as files) | US-201 |
+| Record live from this Mac | US-209, US-210 |
 | Transcripts downloaded from Zoom | US-203 |
 | Find a phrase in a long transcript | US-207 |
 | Pin a thought to a moment in the lecture | US-208 |

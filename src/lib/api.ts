@@ -70,8 +70,8 @@ export function renameArtifact(id: string, name: string) {
   return invoke<Artifact>("rename_artifact", { args: { id, name } });
 }
 
-export function deleteArtifact(id: string) {
-  return invoke<void>("delete_artifact", { args: { id } });
+export function deleteArtifact(id: string, deleteOriginal = false) {
+  return invoke<void>("delete_artifact", { args: { id, deleteOriginal } });
 }
 
 export function retryArtifact(id: string) {
@@ -151,4 +151,49 @@ export function newChatThread(scopeType: ChatScopeType, scopeId: string) {
 
 export function askChat(scopeType: ChatScopeType, scopeId: string, question: string) {
   return invoke<{ messages: ChatTurn[] }>("ask_chat", { args: { scopeType, scopeId, question } });
+}
+
+export type RecordingSource = "voice" | "system";
+
+export type StartRecordingResult = {
+  artifact: Artifact;
+  inputLabel: string;
+};
+
+export type RecordingStatus = {
+  active: boolean;
+  artifactId: string | null;
+  meetingGroupId: string | null;
+  source: string | null;
+  startedAtUnixMs: number | null;
+  inputLabel: string | null;
+};
+
+export type RecordingCapabilities = {
+  microphone: boolean;
+  systemAudio: boolean;
+};
+
+export function startRecording(meetingGroupId: string, source: RecordingSource) {
+  return invoke<StartRecordingResult>("start_recording", { args: { meetingGroupId, source } });
+}
+
+export function stopRecording() {
+  return invoke<Artifact>("stop_recording");
+}
+
+export function recordingStatus() {
+  return invoke<RecordingStatus>("recording_status");
+}
+
+export function recordingCapabilities() {
+  return invoke<RecordingCapabilities>("recording_capabilities");
+}
+
+export function getRms() {
+  return invoke<number>("get_rms");
+}
+
+export function getSpectrum() {
+  return invoke<number[]>("get_spectrum");
 }

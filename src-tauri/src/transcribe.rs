@@ -1,6 +1,7 @@
 //! Persistent faster-whisper worker. This POC uses `small.en` for uploaded files.
 
 use anyhow::{Context, Result};
+use hound::{SampleFormat, WavSpec, WavWriter};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -196,4 +197,30 @@ impl Transcriber {
             .filter(|s| !s.text.trim().is_empty())
             .collect())
     }
+
+    pub fn transcribe_samples(&self, samples: &[f32]) -> Result<Vec<TranscriptSegment>> {
+        let tmp = tempfile::Builder::new()
+            .suffix(".wav")
+            .tempfile()
+            .context("temp wav")?;
+        write_wav_f32(tmp.path(), samples).context("write temp wav")?;
+        let segments = self.transcribe_path(tmp.path())?;
+        drop(tmp);
+        Ok(segments)
+    }
+}
+
+fn write_wav_f32(path: &Path, samples: &[f32]) -> Result<()> {
+    let spec = WavSpec {
+        channels: 1,
+        sample_rate: 16_000,
+        bits_per_sample: 32,
+        sample_format: SampleFormat::Float,
+    };
+    let mut w = WavWriter::create(path, spec).context("WavWriter::create")?;
+    for &s in samples {
+        w.write_sample(s)?;
+    }
+    w.finalize().context("finalize wav")?;
+    Ok(())
 }

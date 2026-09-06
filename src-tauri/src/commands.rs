@@ -6,6 +6,7 @@ use crate::db::{
 };
 use crate::error::AppResult;
 use crate::llm;
+use crate::recording::{self, RecordingCapabilities, RecordingStatus, StartRecordingResult};
 use crate::state::AppState;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -28,6 +29,14 @@ pub struct RenameArgs {
 #[serde(rename_all = "camelCase")]
 pub struct IdArgs {
     pub id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteArtifactArgs {
+    pub id: String,
+    #[serde(default)]
+    pub delete_original: bool,
 }
 
 #[derive(Deserialize)]
@@ -103,7 +112,13 @@ pub fn rename_meeting_group(
 }
 
 #[tauri::command]
-pub fn delete_meeting_group(state: State<'_, Arc<AppState>>, args: IdArgs) -> AppResult<()> {
+pub async fn delete_meeting_group(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+    args: IdArgs,
+) -> AppResult<()> {
+    let state = state.inner().clone();
+    recording::abort_if_group(&app, &state, &args.id).await;
     state.db.delete_meeting_group(&args.id)
 }
 
@@ -157,9 +172,24 @@ pub fn rename_artifact(state: State<'_, Arc<AppState>>, args: RenameArgs) -> App
 }
 
 #[tauri::command]
-pub fn delete_artifact(app: AppHandle, state: State<'_, Arc<AppState>>, args: IdArgs) -> AppResult<()> {
+pub async fn delete_artifact(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+    args: DeleteArtifactArgs,
+) -> AppResult<()> {
+    let state = state.inner().clone();
+    let artifact = state.db.get_artifact(&args.id)?;
+    recording::abort_if_artifact(&app, &state, &args.id).await;
     state.db.delete_artifact(&args.id)?;
-    artifacts::delete_artifact_files(&app, &args.id);
+    let is_recording = artifact.source_type == "voice" || artifact.source_type == "system";
+    if args.delete_original || !is_recording {
+        artifacts::delete_artifact_files(&app, &args.id);
+    }
+    if args.delete_original {
+        if let Ok(library) = crate::paths::library_dir(&app) {
+            artifacts::delete_original_source(&library, &artifact.original_path);
+        }
+    }
     audio_peaks::invalidate_artifact(&args.id);
     Ok(())
 }
@@ -305,4 +335,54 @@ pub async fn ask_chat(
 ) -> AppResult<ChatThreadView> {
     let state = state.inner().clone();
     chat::ask(&state, &args.scope_type, &args.scope_id, &args.question).await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartRecordingArgs {
+    pub meeting_group_id: String,
+    pub source: String,
+}
+
+#[tauri::command]
+pub async fn start_recording(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+    args: StartRecordingArgs,
+) -> AppResult<StartRecordingResult> {
+    recording::start_recording(
+        app,
+        state.inner().clone(),
+        args.meeting_group_id,
+        args.source,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn stop_recording(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+) -> AppResult<Artifact> {
+    recording::stop_recording(app, state.inner().clone()).await
+}
+
+#[tauri::command]
+pub fn recording_status(state: State<'_, Arc<AppState>>) -> RecordingStatus {
+    recording::status(&state)
+}
+
+#[tauri::command]
+pub fn recording_capabilities() -> RecordingCapabilities {
+    recording::capabilities()
+}
+
+#[tauri::command]
+pub fn get_rms(state: State<'_, Arc<AppState>>) -> f32 {
+    recording::rms(&state)
+}
+
+#[tauri::command]
+pub fn get_spectrum(state: State<'_, Arc<AppState>>) -> Vec<f32> {
+    recording::spectrum(&state)
 }

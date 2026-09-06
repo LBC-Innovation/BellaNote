@@ -22,6 +22,14 @@ fn ensure_sidecar_placeholders() {
 
 fn main() {
     ensure_sidecar_placeholders();
+    if std::env::var("TARGET")
+        .unwrap_or_default()
+        .contains("apple-darwin")
+    {
+        for dir in swift_concurrency_lib_dirs() {
+            println!("cargo:rustc-link-arg=-Wl,-rpath,{}", dir.display());
+        }
+    }
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "get_library",
@@ -54,7 +62,33 @@ fn main() {
             "get_chat_thread",
             "new_chat_thread",
             "ask_chat",
+            "start_recording",
+            "stop_recording",
+            "recording_status",
+            "recording_capabilities",
+            "get_rms",
+            "get_spectrum",
         ]),
     ))
     .expect("tauri build failed");
+}
+
+fn swift_concurrency_lib_dirs() -> Vec<std::path::PathBuf> {
+    let sys = std::path::Path::new("/usr/lib/swift");
+    if sys.is_dir() {
+        return vec![sys.to_path_buf()];
+    }
+    let candidates = [
+        "/Library/Developer/CommandLineTools/usr/lib/swift-5.5/macosx",
+        "/Library/Developer/CommandLineTools/usr/lib/swift/macosx",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/macosx",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.5/macosx",
+    ];
+    for c in candidates {
+        let p = std::path::Path::new(c);
+        if p.join("libswift_Concurrency.dylib").is_file() {
+            return vec![p.to_path_buf()];
+        }
+    }
+    Vec::new()
 }

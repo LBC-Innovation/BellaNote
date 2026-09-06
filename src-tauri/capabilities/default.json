@@ -39,6 +39,12 @@
     "allow-chat-scope-preview",
     "allow-get-chat-thread",
     "allow-new-chat-thread",
-    "allow-ask-chat"
+    "allow-ask-chat",
+    "allow-start-recording",
+    "allow-stop-recording",
+    "allow-recording-status",
+    "allow-recording-capabilities",
+    "allow-get-rms",
+    "allow-get-spectrum"
   ]
 }
