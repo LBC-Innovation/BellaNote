@@ -1,6 +1,8 @@
 use crate::artifacts;
 use crate::chat::{self, ChatThreadView, ScopePreview};
-use crate::db::{Artifact, LibraryOrganization, MeetingGroup, Organization, Topic};
+use crate::db::{
+    Artifact, ArtifactComment, LibraryOrganization, MeetingGroup, Organization, Topic,
+};
 use crate::error::AppResult;
 use crate::llm;
 use crate::state::AppState;
@@ -168,6 +170,58 @@ pub fn get_artifact_audio_path(app: AppHandle, args: IdArgs) -> AppResult<Option
 #[tauri::command]
 pub fn retry_artifact(app: AppHandle, state: State<'_, Arc<AppState>>, args: IdArgs) -> AppResult<Artifact> {
     artifacts::retry_artifact(&app, &state, &args.id)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtifactIdArgs {
+    pub artifact_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCommentArgs {
+    pub artifact_id: String,
+    pub time_ms: i64,
+    pub body: String,
+}
+
+#[tauri::command]
+pub fn list_artifact_comments(
+    state: State<'_, Arc<AppState>>,
+    args: ArtifactIdArgs,
+) -> AppResult<Vec<ArtifactComment>> {
+    state.db.list_artifact_comments(&args.artifact_id)
+}
+
+#[tauri::command]
+pub fn create_artifact_comment(
+    state: State<'_, Arc<AppState>>,
+    args: CreateCommentArgs,
+) -> AppResult<ArtifactComment> {
+    state
+        .db
+        .create_artifact_comment(&args.artifact_id, args.time_ms, &args.body)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCommentArgs {
+    pub id: String,
+    pub body: String,
+}
+
+#[tauri::command]
+pub fn update_artifact_comment(
+    state: State<'_, Arc<AppState>>,
+    args: UpdateCommentArgs,
+) -> AppResult<ArtifactComment> {
+    state.db.update_artifact_comment(&args.id, &args.body)
+}
+
+#[tauri::command]
+pub fn delete_artifact_comment(state: State<'_, Arc<AppState>>, args: IdArgs) -> AppResult<()> {
+    state.db.delete_artifact_comment(&args.id)
 }
 
 #[derive(Deserialize)]

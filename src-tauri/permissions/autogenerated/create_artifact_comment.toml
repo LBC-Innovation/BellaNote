@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-create-artifact-comment"
+description = "Enables the create_artifact_comment command without any pre-configured scope."
+commands.allow = ["create_artifact_comment"]
+
+[[permission]]
+identifier = "deny-create-artifact-comment"
+description = "Denies the create_artifact_comment command without any pre-configured scope."
+commands.deny = ["create_artifact_comment"]

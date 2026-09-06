@@ -1,5 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Artifact, LibraryOrganization, MeetingGroup, Organization, Topic } from "./types";
+import type {
+  Artifact,
+  ArtifactComment,
+  LibraryOrganization,
+  MeetingGroup,
+  Organization,
+  Topic,
+} from "./types";
 
 export function getLibrary() {
   return invoke<LibraryOrganization[]>("get_library");
@@ -73,6 +80,24 @@ export function retryArtifact(id: string) {
 
 export function getArtifactAudioPath(id: string) {
   return invoke<string | null>("get_artifact_audio_path", { args: { id } });
+}
+
+export function listArtifactComments(artifactId: string) {
+  return invoke<ArtifactComment[]>("list_artifact_comments", { args: { artifactId } });
+}
+
+export function createArtifactComment(artifactId: string, timeMs: number, body: string) {
+  return invoke<ArtifactComment>("create_artifact_comment", {
+    args: { artifactId, timeMs: Math.round(timeMs), body },
+  });
+}
+
+export function updateArtifactComment(id: string, body: string) {
+  return invoke<ArtifactComment>("update_artifact_comment", { args: { id, body } });
+}
+
+export function deleteArtifactComment(id: string) {
+  return invoke<void>("delete_artifact_comment", { args: { id } });
 }
 
 export type ChatTurn = { role: string; content: string; createdAt?: string };
