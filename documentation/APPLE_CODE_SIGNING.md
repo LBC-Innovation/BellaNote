@@ -206,7 +206,7 @@ After the secrets are saved, delete `certificate-base64.txt` from Downloads. Kee
 No workflow or app code change is required once the secrets exist.
 
 1. Keep `version` in sync in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml` if you are cutting a new version.
-2. **Actions → Release → Run workflow**, or push a tag `v` + that version (example: `v0.1.0-beta.2`).
+2. **Actions → Release → Run workflow**, or push a tag `v` + that version (example: `v0.1.0-beta.3`).
 3. Two jobs run in parallel — that is intentional:
 
    | Job | `.dmg` for |
