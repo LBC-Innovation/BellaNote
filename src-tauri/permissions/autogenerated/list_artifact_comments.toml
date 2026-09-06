@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-artifact-comments"
+description = "Enables the list_artifact_comments command without any pre-configured scope."
+commands.allow = ["list_artifact_comments"]
+
+[[permission]]
+identifier = "deny-list-artifact-comments"
+description = "Denies the list_artifact_comments command without any pre-configured scope."
+commands.deny = ["list_artifact_comments"]

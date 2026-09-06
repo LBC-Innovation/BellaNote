@@ -98,6 +98,7 @@ Epic 2  Files & transcripts
         US-205  Re-file / move an artifact                 Not started
         ~~US-206  Remove an artifact~~                      Complete
         ~~US-207  Search within a transcript~~              Complete
+        US-208  Leave a timed comment on audio             Not started
 
 Epic 3  Scoped chat
         ~~US-301  Save the ChatGPT API token~~              Complete
@@ -858,6 +859,68 @@ Epic 3  Scoped chat
 
 ---
 
+## US-208 — Leave a timed comment on audio
+
+**Status:** Not started
+
+**As a** student,  
+**I want** to pin a short comment to a moment in the audio,  
+**so that** I can jump back to that part of the lecture from the waveform or a list.
+
+**Acceptance**
+
+- On a ready audio artifact, a comment button sits to the right of **Search transcript**.  
+- Clicking it remembers the current playhead (or `00:00` if playback has not started) and expands a text field to the right of the button.  
+- Saving stores the comment with that timecode. Empty text does not save. Escape or a second click on the button (while the field is empty) cancels.  
+- Each saved comment draws a vertical line on the waveform with a small round node at the top. Clicking the node seeks and starts playback at that time.  
+- A **Comments** accordion sits under the Transcript card. It lists Time and Comment, oldest timecode first. Clicking a row seeks and starts playback at that time.  
+- Comments persist locally with the artifact (deleted with the file). Transcript-only files have no comment button, markers, or Comments card.  
+- The comment field is capped at 500 characters.
+
+### Scenarios
+
+**Pin a moment while listening**
+
+- **Given** `lecture-1.m4a` is Ready and playing at `12:04`  
+- **When** I click the comment button next to Search transcript  
+- **Then** a text field opens to the right of the button  
+- **And** it is tied to `12:04`
+
+**Save the comment**
+
+- **Given** the comment field is open at `12:04`  
+- **When** I type `switching costs example` and save  
+- **Then** the field closes  
+- **And** a marker appears on the waveform at `12:04`  
+- **And** Comments lists `12:04` / `switching costs example`
+
+**Jump from the waveform**
+
+- **Given** a comment exists at `12:04`  
+- **When** I click its node on the waveform  
+- **Then** playback starts at `12:04`
+
+**Jump from the table**
+
+- **Given** Comments is open and lists two comments  
+- **When** I click the row for `12:04`  
+- **Then** playback starts at `12:04`
+
+**Cancel without saving**
+
+- **Given** the comment field is open and empty  
+- **When** I press Escape  
+- **Then** the field closes  
+- **And** no comment or marker is added
+
+**Transcript-only file**
+
+- **Given** `zoom-export.vtt` is selected  
+- **When** I look at the transcript card  
+- **Then** there is no comment button, waveform marker, or Comments card
+
+---
+
 # Epic 3 — Chat with a chosen scope
 
 ## ~~US-301 — Provide and store the ChatGPT API token~~
@@ -1223,10 +1286,11 @@ Shipped: US-101–107, US-201–204, US-206, US-207, US-301, US-302, US-401, US-
 
 Still open from this slice:
 
-1. **US-205** — Move an artifact to another meeting group  
-2. **US-303** — Clickable citations that open the artifact / seek  
-3. **US-304** — Thread archive / list of recent threads  
-4. **US-305** — Expandable scope-preview file list  
+1. **US-208** — Timed comments on audio (this branch)  
+2. **US-205** — Move an artifact to another meeting group  
+3. **US-303** — Clickable citations that open the artifact / seek  
+4. **US-304** — Thread archive / list of recent threads  
+5. **US-305** — Expandable scope-preview file list  
 
 Then the product-scope work that was always out of this slice: live capture, Windows, summaries, tasks, YouTube, sharing.
 
@@ -1243,6 +1307,7 @@ Then the product-scope work that was always out of this slice: live capture, Win
 | Recordings I made while I was there (as files) | US-201 |
 | Transcripts downloaded from Zoom | US-203 |
 | Find a phrase in a long transcript | US-207 |
+| Pin a thought to a moment in the lecture | US-208 |
 | Ask NL questions with org / topic / group / one-file scope | US-302, US-305 |
 | Well-organized answer UI | US-303, US-402 |
 | ChatGPT API token we provide | US-301 |

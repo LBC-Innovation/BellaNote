@@ -67,6 +67,16 @@ pub struct Artifact {
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct ArtifactComment {
+    pub id: String,
+    pub artifact_id: String,
+    pub time_ms: i64,
+    pub body: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct LibraryOrganization {
     #[serde(flatten)]
     pub organization: Organization,
@@ -79,6 +89,19 @@ fn now_rfc3339() -> String {
 
 fn new_id() -> String {
     Uuid::new_v4().to_string()
+}
+
+fn trim_comment_body(body: &str) -> AppResult<String> {
+    let body = body.trim().to_string();
+    if body.is_empty() {
+        return Err(AppError::Message("A comment is required.".into()));
+    }
+    if body.chars().count() > 500 {
+        return Err(AppError::Message(
+            "Keep comments to 500 characters or fewer.".into(),
+        ));
+    }
+    Ok(body)
 }
 
 fn trim_name(name: &str) -> AppResult<String> {
@@ -145,6 +168,16 @@ impl Db {
                 duration_ms INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS artifact_comments (
+                id TEXT PRIMARY KEY,
+                artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
+                time_ms INTEGER NOT NULL,
+                body TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS artifact_comments_artifact
+                ON artifact_comments (artifact_id, time_ms);
 
             CREATE TABLE IF NOT EXISTS chat_threads (
                 id TEXT PRIMARY KEY,
@@ -508,6 +541,93 @@ impl Db {
         Ok(())
     }
 
+    pub fn list_artifact_comments(&self, artifact_id: &str) -> AppResult<Vec<ArtifactComment>> {
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, artifact_id, time_ms, body, created_at
+             FROM artifact_comments
+             WHERE artifact_id = ?1
+             ORDER BY time_ms ASC, created_at ASC",
+        )?;
+        let rows = stmt.query_map(params![artifact_id], map_comment)?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
+    pub fn create_artifact_comment(
+        &self,
+        artifact_id: &str,
+        time_ms: i64,
+        body: &str,
+    ) -> AppResult<ArtifactComment> {
+        let body = trim_comment_body(body)?;
+        let artifact = self.get_artifact(artifact_id)?;
+        if !artifact.has_audio {
+            return Err(AppError::Message(
+                "Comments can only be added on audio files.".into(),
+            ));
+        }
+        let time_ms = time_ms.max(0);
+        let time_ms = if artifact.duration_ms > 0 {
+            time_ms.min(artifact.duration_ms)
+        } else {
+            time_ms
+        };
+        let comment = ArtifactComment {
+            id: new_id(),
+            artifact_id: artifact_id.to_string(),
+            time_ms,
+            body,
+            created_at: now_rfc3339(),
+        };
+        let conn = self.lock()?;
+        conn.execute(
+            "INSERT INTO artifact_comments (id, artifact_id, time_ms, body, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                comment.id,
+                comment.artifact_id,
+                comment.time_ms,
+                comment.body,
+                comment.created_at
+            ],
+        )?;
+        Ok(comment)
+    }
+
+    pub fn update_artifact_comment(&self, id: &str, body: &str) -> AppResult<ArtifactComment> {
+        let body = trim_comment_body(body)?;
+        let conn = self.lock()?;
+        let changed = conn.execute(
+            "UPDATE artifact_comments SET body = ?1 WHERE id = ?2",
+            params![body, id],
+        )?;
+        if changed == 0 {
+            return Err(AppError::Message("Comment not found.".into()));
+        }
+        drop(conn);
+        self.get_artifact_comment(id)
+    }
+
+    pub fn delete_artifact_comment(&self, id: &str) -> AppResult<()> {
+        let conn = self.lock()?;
+        let changed = conn.execute("DELETE FROM artifact_comments WHERE id = ?1", params![id])?;
+        if changed == 0 {
+            return Err(AppError::Message("Comment not found.".into()));
+        }
+        Ok(())
+    }
+
+    pub fn get_artifact_comment(&self, id: &str) -> AppResult<ArtifactComment> {
+        let conn = self.lock()?;
+        conn.query_row(
+            "SELECT id, artifact_id, time_ms, body, created_at
+             FROM artifact_comments WHERE id = ?1",
+            params![id],
+            map_comment,
+        )
+        .map_err(|_| AppError::Message("Comment not found.".into()))
+    }
+
     pub fn fail_interrupted_imports(&self) -> AppResult<usize> {
         let conn = self.lock()?;
         let changed = conn.execute(
@@ -707,6 +827,16 @@ fn get_topic(conn: &Connection, id: &str) -> AppResult<Topic> {
         },
     )
     .map_err(|_| AppError::Message("Topic not found.".into()))
+}
+
+fn map_comment(row: &rusqlite::Row<'_>) -> rusqlite::Result<ArtifactComment> {
+    Ok(ArtifactComment {
+        id: row.get(0)?,
+        artifact_id: row.get(1)?,
+        time_ms: row.get(2)?,
+        body: row.get(3)?,
+        created_at: row.get(4)?,
+    })
 }
 
 fn map_artifact(row: &rusqlite::Row<'_>) -> rusqlite::Result<Artifact> {

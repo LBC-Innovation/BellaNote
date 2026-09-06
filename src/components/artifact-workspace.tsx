@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Check, ChevronDown, ChevronLeft, FileAudio, FileText, FileUp, Link2, Link2Off, ListChecks, Loader2, Pause, Pencil, Play, Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, FileAudio, FileText, FileUp, Link2, Link2Off, ListChecks, Loader2, MessageSquarePlus, Pause, Pencil, Play, Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ImportDropDialog } from "@/components/import-drop-dialog";
@@ -23,7 +23,7 @@ import { formatAddedDate, isFailedArtifact, isImportingArtifact, isLoadableArtif
 import { formatTimestamp, parseSegments } from "@/lib/segments";
 import { cn } from "@/lib/utils";
 import { useArtifactStore } from "@/store/useArtifactStore";
-import type { Artifact } from "@/lib/types";
+import type { Artifact, ArtifactComment } from "@/lib/types";
 
 async function peaksFromUrl(url: string): Promise<number[]> {
   const response = await fetch(url);
@@ -177,6 +177,15 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
   const [filesOpen, setFilesOpen] = useState(true);
   const [detailOpen, setDetailOpen] = useState(true);
   const [importKind, setImportKind] = useState<"audio" | "transcript" | null>(null);
+  const [comments, setComments] = useState<ArtifactComment[]>([]);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [jumpToMs, setJumpToMs] = useState<number | null>(null);
+  const [commentOpen, setCommentOpen] = useState(false);
+  const [commentTimeMs, setCommentTimeMs] = useState(0);
+  const [commentBody, setCommentBody] = useState("");
+  const [commentSaving, setCommentSaving] = useState(false);
+  const playheadMsRef = useRef(0);
+  const commentInputRef = useRef<HTMLInputElement>(null);
 
   function showImportWait() {
     toast.warning("Please wait, this file is importing", {
@@ -202,13 +211,55 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
     });
   }, [artifacts]);
 
+  async function loadComments(artifactId: string | null) {
+    if (!artifactId) {
+      setComments([]);
+      return;
+    }
+    try {
+      setComments(await api.listArtifactComments(artifactId));
+    } catch {
+      setComments([]);
+    }
+  }
+
+  useEffect(() => {
+    void loadComments(active?.hasAudio ? active.id : null);
+    setCommentOpen(false);
+    setCommentBody("");
+    playheadMsRef.current = 0;
+  }, [active?.id, active?.hasAudio]);
+
+  useEffect(() => {
+    if (commentOpen && commentsOpen) commentInputRef.current?.focus();
+  }, [commentOpen, commentsOpen]);
+
+  function beginComment() {
+    setCommentTimeMs(Math.round(playheadMsRef.current));
+    setCommentsOpen(true);
+    setCommentOpen(true);
+  }
+
+  async function saveComment() {
+    const body = commentBody.trim();
+    if (!body || commentSaving || !active) return;
+    setCommentSaving(true);
+    try {
+      await api.createArtifactComment(active.id, commentTimeMs, body);
+      setCommentOpen(false);
+      setCommentBody("");
+      await loadComments(active.id);
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setCommentSaving(false);
+    }
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">{groupName}</h1>
-          <p className="text-sm text-muted-foreground">Audio and imported transcripts for this meeting group.</p>
-        </div>
+        <h1 className="text-xl font-semibold tracking-tight">{groupName}</h1>
         <ImportMeetingControl onPick={setImportKind} />
       </div>
 
@@ -289,7 +340,14 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
           meta={active ? <ArtifactKindChips artifact={active} /> : undefined}
         >
           {active && isLoadableArtifact(active) ? (
-            <ArtifactDetail artifact={active} />
+            <ArtifactDetail
+              artifact={active}
+              comments={comments}
+              commentDraftMs={commentOpen ? commentTimeMs : null}
+              playheadMsRef={playheadMsRef}
+              jumpToMs={jumpToMs}
+              onJumped={() => setJumpToMs(null)}
+            />
           ) : (
             <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">
               <Plus className="mr-2 size-4" />
@@ -297,6 +355,73 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
             </div>
           )}
         </WorkspaceCard>
+
+        {active?.hasAudio && isLoadableArtifact(active) ? (
+          <WorkspaceCard
+            open={commentsOpen}
+            onOpenChange={setCommentsOpen}
+            title="Comments"
+            meta={comments.length === 1 ? "1 comment" : `${comments.length} comments`}
+            actions={
+              <Button
+                size="icon-sm"
+                variant={commentOpen ? "secondary" : "ghost"}
+                aria-expanded={commentOpen}
+                aria-label="Add a timed comment"
+                onClick={beginComment}
+              >
+                <MessageSquarePlus />
+              </Button>
+            }
+          >
+            {commentOpen ? (
+              <form
+                className="mb-3 flex flex-col gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void saveComment();
+                }}
+              >
+                <Input
+                  ref={commentInputRef}
+                  value={commentBody}
+                  onChange={(event) => setCommentBody(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      setCommentOpen(false);
+                      setCommentBody("");
+                    }
+                  }}
+                  placeholder="Comment this moment"
+                  aria-label="Comment at the remembered time"
+                  maxLength={500}
+                  autoFocus
+                  disabled={commentSaving}
+                />
+                <div className="flex justify-end">
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant="outline"
+                    className="border-white/15 bg-white/10 text-foreground hover:bg-white/15"
+                    disabled={commentSaving || !commentBody.trim()}
+                  >
+                    Save {formatTimestamp(commentTimeMs)}
+                  </Button>
+                </div>
+              </form>
+            ) : null}
+            <CommentsTable
+              comments={comments}
+              composing={commentOpen}
+              onSelect={(timeMs) => setJumpToMs(timeMs)}
+              onChanged={() => {
+                if (active) void loadComments(active.id);
+              }}
+            />
+          </WorkspaceCard>
+        ) : null}
       </div>
 
       <ImportDropDialog
@@ -800,7 +925,181 @@ function PlaybackToolbar({
   );
 }
 
-function ArtifactDetail({ artifact }: { artifact: Artifact }) {
+function CommentsTable({
+  comments,
+  composing,
+  onSelect,
+  onChanged,
+}: {
+  comments: ArtifactComment[];
+  composing: boolean;
+  onSelect: (timeMs: number) => void;
+  onChanged: () => void;
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [remove, setRemove] = useState<ArtifactComment | null>(null);
+
+  async function saveEdit(comment: ArtifactComment) {
+    const body = draft.trim();
+    if (!body || saving) return;
+    if (body === comment.body) {
+      setEditingId(null);
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.updateArtifactComment(comment.id, body);
+      setEditingId(null);
+      onChanged();
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (comments.length === 0) {
+    if (composing) return null;
+    return (
+      <p className="px-1 py-4 text-sm text-muted-foreground">
+        Add a comment to pin this moment on the waveform.
+      </p>
+    );
+  }
+
+  return (
+    <>
+      <ScrollArea className="min-h-0 min-w-0 flex-1">
+      <div className="flex gap-3 px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <span className="w-14 shrink-0">Time</span>
+        <span className="min-w-0 flex-1">Comment</span>
+        <span className="w-14 shrink-0" />
+      </div>
+      <div className="flex flex-col gap-0.5 pr-1">
+        {comments.map((comment) => {
+          const editing = editingId === comment.id;
+          return (
+            <div
+              key={comment.id}
+              className="flex w-full items-start gap-2 rounded-xl px-2 py-1.5 transition-colors hover:bg-white/5"
+            >
+              {editing ? (
+                <div className="flex min-w-0 flex-1 items-start gap-3 py-0.5">
+                  <span className="w-14 shrink-0 pt-1 font-mono text-[11px] text-primary">
+                    {formatTimestamp(comment.timeMs)}
+                  </span>
+                  <Input
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void saveEdit(comment);
+                      }
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        setEditingId(null);
+                      }
+                    }}
+                    maxLength={500}
+                    autoFocus
+                    disabled={saving}
+                    aria-label="Edit comment"
+                    className="h-7 text-sm"
+                  />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onSelect(comment.timeMs)}
+                  className="flex min-w-0 flex-1 items-start gap-3 py-0.5 text-left"
+                >
+                  <span className="w-14 shrink-0 font-mono text-[11px] text-primary">
+                    {formatTimestamp(comment.timeMs)}
+                  </span>
+                  <span className="min-w-0 flex-1 text-sm leading-5">{comment.body}</span>
+                </button>
+              )}
+              <span className="flex w-14 shrink-0 justify-end gap-0.5 pt-0.5">
+                {editing ? (
+                  <Button
+                    size="icon-xs"
+                    variant="ghost"
+                    aria-label="Save comment"
+                    disabled={saving || !draft.trim()}
+                    onClick={() => void saveEdit(comment)}
+                  >
+                    <Check />
+                  </Button>
+                ) : (
+                  <Button
+                    size="icon-xs"
+                    variant="ghost"
+                    aria-label="Edit comment"
+                    onClick={() => {
+                      setEditingId(comment.id);
+                      setDraft(comment.body);
+                    }}
+                  >
+                    <Pencil />
+                  </Button>
+                )}
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label="Delete comment"
+                  className="text-muted-foreground hover:text-destructive"
+                  onClick={() => setRemove(comment)}
+                >
+                  <Trash2 />
+                </Button>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </ScrollArea>
+      <ConfirmDialog
+        open={Boolean(remove)}
+        title={remove ? `Delete this comment?` : "Delete comment"}
+        description="This removes the pin from the waveform. You cannot undo this."
+        confirmLabel="Delete"
+        onOpenChange={(open) => {
+          if (!open) setRemove(null);
+        }}
+        onConfirm={async () => {
+          if (!remove) return;
+          try {
+            await api.deleteArtifactComment(remove.id);
+            if (editingId === remove.id) setEditingId(null);
+            onChanged();
+          } catch (err) {
+            toast.error(errorMessage(err));
+            throw err;
+          }
+        }}
+      />
+    </>
+  );
+}
+
+function ArtifactDetail({
+  artifact,
+  comments,
+  commentDraftMs,
+  playheadMsRef,
+  jumpToMs,
+  onJumped,
+}: {
+  artifact: Artifact;
+  comments: ArtifactComment[];
+  commentDraftMs: number | null;
+  playheadMsRef: { current: number };
+  jumpToMs: number | null;
+  onJumped: () => void;
+}) {
   const segments = useMemo(() => parseSegments(artifact.segmentsJson), [artifact.segmentsJson]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lineRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -844,6 +1143,7 @@ function ArtifactDetail({ artifact }: { artifact: Artifact }) {
     setPlaying(false);
     setTranscriptQuery("");
     setAudioDurationMs(artifact.durationMs);
+    playheadMsRef.current = 0;
     if (!artifact.hasAudio) return;
     void api.getArtifactAudioPath(artifact.id).then(async (path) => {
       if (!path || cancelled) return;
@@ -870,7 +1170,9 @@ function ArtifactDetail({ artifact }: { artifact: Artifact }) {
     };
     const onTime = () => {
       const duration = audio.duration || artifact.durationMs / 1000;
-      setCurrentTimeMs(audio.currentTime * 1000);
+      const nextMs = audio.currentTime * 1000;
+      playheadMsRef.current = nextMs;
+      setCurrentTimeMs(nextMs);
       setProgress(duration ? audio.currentTime / duration : 0);
       syncDuration();
     };
@@ -907,7 +1209,9 @@ function ArtifactDetail({ artifact }: { artifact: Artifact }) {
     if (!audio) return;
     const duration = audio.duration || artifact.durationMs / 1000;
     audio.currentTime = ratio * duration;
-    setCurrentTimeMs(ratio * duration * 1000);
+    const nextMs = ratio * duration * 1000;
+    playheadMsRef.current = nextMs;
+    setCurrentTimeMs(nextMs);
     setProgress(ratio);
   }
 
@@ -915,7 +1219,12 @@ function ArtifactDetail({ artifact }: { artifact: Artifact }) {
     const audio = audioRef.current;
     if (!audio || !artifact.hasAudio) return;
     audio.currentTime = ms / 1000;
+    playheadMsRef.current = ms;
     setCurrentTimeMs(ms);
+    const durationMs = (Number.isFinite(audio.duration) && audio.duration > 0
+      ? audio.duration * 1000
+      : artifact.durationMs) || 0;
+    setProgress(durationMs ? ms / durationMs : 0);
   }
 
   function changePlaybackRate(rate: PlaybackRate) {
@@ -928,15 +1237,56 @@ function ArtifactDetail({ artifact }: { artifact: Artifact }) {
     if (audioRef.current) audioRef.current.playbackRate = rate;
   }
 
+  function seekAndPlay(ms: number) {
+    seekMs(ms);
+    const audio = audioRef.current;
+    if (audio) void audio.play();
+  }
+
+  useEffect(() => {
+    if (jumpToMs == null) return;
+    seekAndPlay(jumpToMs);
+    onJumped();
+  }, [jumpToMs]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {artifact.hasAudio ? (
         <div className="shrink-0">
           {audioUrl ? <audio ref={audioRef} src={audioUrl} className="hidden" /> : null}
           {peaks.length > 0 ? (
-            <StaticWaveform peaks={peaks} progress={progress} onSeek={seek} />
+            <StaticWaveform
+              peaks={peaks}
+              progress={progress}
+              markers={[
+                ...comments.map((comment) => ({
+                  id: comment.id,
+                  ratio:
+                    (audioDurationMs || artifact.durationMs) > 0
+                      ? comment.timeMs / (audioDurationMs || artifact.durationMs)
+                      : 0,
+                })),
+                ...(commentDraftMs != null
+                  ? [
+                      {
+                        id: "draft",
+                        ratio:
+                          (audioDurationMs || artifact.durationMs) > 0
+                            ? commentDraftMs / (audioDurationMs || artifact.durationMs)
+                            : 0,
+                        draft: true,
+                      },
+                    ]
+                  : []),
+              ]}
+              onSeek={seek}
+              onMarkerClick={(id) => {
+                const found = comments.find((comment) => comment.id === id);
+                if (found) seekAndPlay(found.timeMs);
+              }}
+            />
           ) : (
-            <div className="flex h-20 items-center rounded-2xl bg-black/20 px-4 text-sm text-muted-foreground">
+            <div className="flex h-8 items-center rounded-2xl bg-black/20 px-4 text-sm text-muted-foreground">
               Preparing waveform…
             </div>
           )}
@@ -960,6 +1310,29 @@ function ArtifactDetail({ artifact }: { artifact: Artifact }) {
       ) : (
         <p className="shrink-0 text-sm text-muted-foreground">No waveform — this meeting is transcript only.</p>
       )}
+
+      {canSearchTranscript ? (
+        <div className="relative mt-3 shrink-0">
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={transcriptQuery}
+            onChange={(event) => setTranscriptQuery(event.target.value)}
+            placeholder="Search transcript"
+            aria-label="Search transcript"
+            className={cn("pl-8", transcriptQuery ? "pr-8" : null)}
+          />
+          {transcriptQuery ? (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => setTranscriptQuery("")}
+              className="absolute top-1/2 right-1.5 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+            >
+              <X className="size-3.5" />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       <ScrollArea className="mt-3 min-h-0 flex-1">
         {artifact.status === "transcribing" ? (
@@ -986,7 +1359,7 @@ function ArtifactDetail({ artifact }: { artifact: Artifact }) {
                       ? "border-primary/40 bg-primary/18"
                       : "border-transparent hover:bg-white/5",
                   )}
-                  onClick={() => seekMs(seg.start_ms)}
+                  onClick={() => seekAndPlay(seg.start_ms)}
                 >
                   <span className="block px-4 py-2.5 text-sm leading-6">
                     {seg.start_ms > 0 ? (
@@ -1020,29 +1393,6 @@ function ArtifactDetail({ artifact }: { artifact: Artifact }) {
           <p className="whitespace-pre-wrap text-sm leading-relaxed">{artifact.transcript}</p>
         )}
       </ScrollArea>
-
-      {canSearchTranscript ? (
-        <div className="relative mt-2 shrink-0">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={transcriptQuery}
-            onChange={(event) => setTranscriptQuery(event.target.value)}
-            placeholder="Search transcript"
-            aria-label="Search transcript"
-            className={cn("pl-8", transcriptQuery ? "pr-8" : null)}
-          />
-          {transcriptQuery ? (
-            <button
-              type="button"
-              aria-label="Clear search"
-              onClick={() => setTranscriptQuery("")}
-              className="absolute top-1/2 right-1.5 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
-            >
-              <X className="size-3.5" />
-            </button>
-          ) : null}
-        </div>
-      ) : null}
     </div>
   );
 }

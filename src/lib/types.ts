@@ -43,6 +43,14 @@ export type Artifact = {
   whisperModel?: string;
 };
 
+export type ArtifactComment = {
+  id: string;
+  artifactId: string;
+  timeMs: number;
+  body: string;
+  createdAt: string;
+};
+
 export type TranscriptSegment = {
   text: string;
   start_ms: number;

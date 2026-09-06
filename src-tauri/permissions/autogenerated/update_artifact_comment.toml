@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-update-artifact-comment"
+description = "Enables the update_artifact_comment command without any pre-configured scope."
+commands.allow = ["update_artifact_comment"]
+
+[[permission]]
+identifier = "deny-update-artifact-comment"
+description = "Denies the update_artifact_comment command without any pre-configured scope."
+commands.deny = ["update_artifact_comment"]

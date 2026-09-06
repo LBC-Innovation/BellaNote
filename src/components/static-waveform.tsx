@@ -1,14 +1,29 @@
 import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 
+export type WaveformMarker = {
+  id: string;
+  ratio: number;
+  draft?: boolean;
+};
+
 type Props = {
   peaks: number[];
   progress: number;
+  markers?: WaveformMarker[];
   onSeek: (ratio: number) => void;
+  onMarkerClick?: (id: string) => void;
   className?: string;
 };
 
-export function StaticWaveform({ peaks, progress, onSeek, className }: Props) {
+export function StaticWaveform({
+  peaks,
+  progress,
+  markers = [],
+  onSeek,
+  onMarkerClick,
+  className,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -46,16 +61,63 @@ export function StaticWaveform({ peaks, progress, onSeek, className }: Props) {
   }
 
   return (
-    <canvas
-      ref={canvasRef}
-      className={cn("h-20 w-full cursor-pointer rounded-2xl", className)}
-      onPointerDown={(event) => {
-        event.currentTarget.setPointerCapture(event.pointerId);
-        onSeek(ratioFromEvent(event));
-      }}
-      onPointerMove={(event) => {
-        if (event.buttons === 1) onSeek(ratioFromEvent(event));
-      }}
-    />
+    <div className={cn("relative h-8 w-full", className)}>
+      <canvas
+        ref={canvasRef}
+        className="h-full w-full cursor-pointer rounded-2xl"
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          onSeek(ratioFromEvent(event));
+        }}
+        onPointerMove={(event) => {
+          if (event.buttons === 1) onSeek(ratioFromEvent(event));
+        }}
+      />
+      {markers.map((marker) => {
+        const left = `${Math.min(100, Math.max(0, marker.ratio * 100))}%`;
+        const nodeClass = cn(
+          "pointer-events-auto absolute left-0 size-2 -translate-x-1/2 rounded-full border border-white/50",
+          marker.draft
+            ? "bg-[#8EC5FF]/55"
+            : "bg-[#8EC5FF] shadow-[0_0_8px_#8EC5FF] hover:scale-125",
+        );
+        return (
+          <div
+            key={marker.id}
+            className="pointer-events-none absolute inset-y-0 z-10"
+            style={{ left }}
+          >
+            <div
+              className={cn(
+                "absolute top-0 bottom-0 w-px -translate-x-1/2",
+                marker.draft ? "bg-[#8EC5FF]/50" : "bg-[#8EC5FF]",
+              )}
+            />
+            <button
+              type="button"
+              title={marker.draft ? "New comment" : "Play from this comment"}
+              aria-label={marker.draft ? "Draft comment marker" : "Play from comment"}
+              disabled={marker.draft || !onMarkerClick}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (!marker.draft) onMarkerClick?.(marker.id);
+              }}
+              className={cn(nodeClass, "top-0")}
+            />
+            <button
+              type="button"
+              title={marker.draft ? "New comment" : "Play from this comment"}
+              aria-label={marker.draft ? "Draft comment marker" : "Play from comment"}
+              disabled={marker.draft || !onMarkerClick}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (!marker.draft) onMarkerClick?.(marker.id);
+              }}
+              className={cn(nodeClass, "bottom-0")}
+            />
+          </div>
+        );
+      })}
+    </div>
   );
 }
