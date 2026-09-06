@@ -162,7 +162,7 @@ Use the titlebar layout buttons to show only Library, only Transcript, or only C
 - macOS with **Xcode Command Line Tools**
 - **Node 20+**
 - **Rust** via [rustup](https://rustup.rs/)
-- **Python 3** (Homebrew’s interpreter is “externally managed” — use a venv, do not `pip install` into system Python)
+- **Python 3** for `npm run tauri:dev` only (Homebrew’s interpreter is “externally managed” — use a venv). Installers bundle their own worker.
 
 ### First-time setup
 
@@ -173,7 +173,7 @@ source .venv/bin/activate
 python3 -m pip install -r requirements.txt
 ```
 
-`requirements.txt` installs **faster-whisper** for `scripts/transcribe_worker.py`. The first audio import downloads the `small.en` model into the Whisper cache; that can take a minute.
+`requirements.txt` installs **faster-whisper** for local `tauri:dev`. Packaged builds freeze that worker with `npm run sidecar:whisper` (also run automatically before the `.dmg` is assembled). The first audio import downloads the `small.en` model into Application Support; that can take a minute.
 
 ### Run the desktop app
 
@@ -187,26 +187,55 @@ Useful scripts:
 
 | Command             | What it does                         |
 | ------------------- | ------------------------------------ |
-| `npm run tauri:dev` | Native app + Vite HMR                |
-| `npm run dev`       | Vite only (UI without Rust commands) |
-| `npm run build`     | `tsc` + production frontend          |
-| `npm run tauri`     | Tauri CLI (`build`, etc.)            |
+| `npm run tauri:dev`      | Native app + Vite HMR                         |
+| `npm run tauri:build`    | Production `.app` + `.dmg` (builds the worker) |
+| `npm run sidecar:whisper` | Freeze Python + faster-whisper into a sidecar |
+| `npm run dev`            | Vite only (UI without Rust commands)          |
+| `npm run build`          | `tsc` + production frontend                   |
+| `npm run tauri`          | Tauri CLI (`build`, etc.)                     |
+
+### Install a local build
+
+On this Mac (after first-time setup):
+
+```bash
+npm run tauri:build
+```
+
+The installer lands at `src-tauri/target/release/bundle/dmg/`. Open the `.dmg`, drag **BellaNote** into Applications, then launch it from there.
+
+The first launch of an unsigned build is blocked by Gatekeeper. Right-click the app → **Open** → **Open**.
+
+Python and faster-whisper are frozen into the app. The person who installs the `.dmg` does not install those dependencies. The first audio import downloads the `small.en` model into Application Support; after that, transcription stays on device.
+
+### GitHub Releases
+
+The **Release** workflow (`.github/workflows/release.yml`) freezes the whisper worker, then builds Apple Silicon and Intel `.dmg` files and attaches them to a **draft** GitHub Release.
+
+1. Keep `version` in sync in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`.
+2. Either push a tag (`git tag v0.1.0 && git push origin v0.1.0`) or run **Actions → Release → Run workflow**.
+3. When both macOS jobs finish, open the draft release, download the `.dmg` that matches the Mac, and publish the release when you are ready.
+
+The workflow signs and notarizes only if Apple certificate secrets are set (`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, and the Apple ID / team fields). Without them it still uploads unsigned installers.
+
+If the job cannot create a release, set the repo **Actions** workflow permission to **Read and write**.
 
 ### Environment
 
-The Rust host looks for a Python that can run the worker:
+Packaged builds spawn the bundled `transcribe-worker` sidecar. `tauri:dev` uses the repo Python worker:
 
-1. `ECHO_PYTHON` if set
-2. else `.venv/bin/python3` next to this repo
-3. else `python3` on `PATH`
+1. `ECHO_TRANSCRIBE_SIDECAR` if set
+2. else the sidecar next to the app binary, or `src-tauri/binaries/transcribe-worker-<triple>`
+3. else (debug only) `ECHO_PYTHON` / `.venv/bin/python3` / `python3` plus `scripts/transcribe_worker.py`
 
 Optional:
 
-| Variable                 | Default                        | Purpose                             |
-| ------------------------ | ------------------------------ | ----------------------------------- |
-| `ECHO_PYTHON`            | `.venv/bin/python3`            | Interpreter for the whisper worker  |
-| `ECHO_TRANSCRIBE_SCRIPT` | `scripts/transcribe_worker.py` | Override the worker script          |
-| `WHISPER_MODEL`          | `small.en`                     | Model name passed to faster-whisper |
+| Variable                   | Default                        | Purpose                                      |
+| -------------------------- | ------------------------------ | -------------------------------------------- |
+| `ECHO_TRANSCRIBE_SIDECAR`  | bundled `transcribe-worker`    | Override the frozen worker binary            |
+| `ECHO_PYTHON`              | `.venv/bin/python3`            | Interpreter for `tauri:dev`                  |
+| `ECHO_TRANSCRIBE_SCRIPT`   | `scripts/transcribe_worker.py` | Override the worker script in `tauri:dev`    |
+| `WHISPER_MODEL`            | `small.en`                     | Model name passed to faster-whisper          |
 
 ### Repository layout
 

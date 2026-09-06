@@ -177,7 +177,7 @@ fn spawn_transcribe(app: AppHandle, state: Arc<AppState>, id: String, audio_path
                 .lock()
                 .map_err(|_| anyhow::anyhow!("transcriber lock poisoned"))?;
             if slot.is_none() {
-                *slot = Some(Transcriber::new()?);
+                *slot = Some(Transcriber::new(&app)?);
             }
             let _ = state.db.set_artifact_status(&id, "transcribing", "");
             let _ = app.emit("artifact-updated", &id);
