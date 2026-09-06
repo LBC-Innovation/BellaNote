@@ -195,6 +195,11 @@
   animation: title-saved 900ms ease-out;
 }
 
+[data-tauri-drag-region] {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
 .notice-toaster [data-sonner-toast][data-styled="true"] {
   justify-content: center;
 }

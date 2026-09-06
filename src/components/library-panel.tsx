@@ -11,7 +11,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import * as api from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
@@ -118,25 +117,29 @@ function TreeButton({
         }
       }}
       className={cn(
-        "group flex items-center gap-1 rounded-xl px-2 py-1.5",
+        "group grid w-full max-w-full grid-cols-[1.5rem_minmax(0,1fr)_1.5rem] items-center gap-1 overflow-hidden rounded-xl py-1.5 pr-1",
         active ? "bg-primary/15 text-foreground" : "hover:bg-white/5",
       )}
       style={{ paddingLeft: 8 + indent * 14 }}
     >
       {onToggleExpand ? (
-        <span className="flex size-6 shrink-0 items-center justify-center text-muted-foreground">
+        <span className="flex size-6 items-center justify-center text-muted-foreground">
           <ChevronDown
             className={cn("size-3.5 transition-transform", !expanded && "-rotate-90")}
           />
         </span>
       ) : (
-        <span className="size-6 shrink-0" aria-hidden="true" />
+        <span className="size-6" aria-hidden="true" />
       )}
-      <span className="min-w-0 flex-1 text-left">
-        <span className="block truncate text-sm font-medium">{label}</span>
+      <span className="min-w-0 overflow-hidden text-left">
+        <span className="block truncate text-sm font-medium" title={label}>
+          {label}
+        </span>
         {meta ? <span className="block truncate text-[11px] text-muted-foreground">{meta}</span> : null}
       </span>
-      <span onClick={(event) => event.stopPropagation()}>{actions}</span>
+      <span className="flex justify-end" onClick={(event) => event.stopPropagation()}>
+        {actions}
+      </span>
     </div>
   );
 }
@@ -226,8 +229,8 @@ export function LibraryPanel({
           }
         />
       ) : (
-        <section className="glass-panel flex min-h-0 flex-1 flex-col rounded-3xl p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+        <section className="glass-panel flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-3xl p-4">
+          <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-1">
               <Button
                 variant="ghost"
@@ -241,26 +244,29 @@ export function LibraryPanel({
                 Library
               </p>
             </div>
-            <div className="flex shrink-0 items-center gap-1">
-              {orgs.length > 0 ? (
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  disabled={!canCollapseAll}
-                  onClick={() => setCollapsed(new Set(collapsibleIds))}
-                >
-                  <FoldVertical />
-                  Collapse all
-                </Button>
-              ) : null}
-              <Button size="sm" onClick={() => setDialog({ type: "create-org" })}>
-                <Plus />
-                Organization
+            <Button
+              size="icon-xs"
+              aria-label="New organization"
+              onClick={() => setDialog({ type: "create-org" })}
+            >
+              <Plus />
+            </Button>
+          </div>
+          {orgs.length > 0 ? (
+            <div className="mt-2 flex justify-center">
+              <Button
+                size="xs"
+                variant="ghost"
+                disabled={!canCollapseAll}
+                onClick={() => setCollapsed(new Set(collapsibleIds))}
+              >
+                <FoldVertical />
+                Collapse all
               </Button>
             </div>
-          </div>
+          ) : null}
 
-          <ScrollArea className="mt-3 min-h-0 flex-1">
+          <div className="mt-3 min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
             {orgs.length === 0 ? (
               <div className="px-1 pt-6">
                 <h2 className="text-base font-semibold tracking-tight">Start with an organization</h2>
@@ -269,7 +275,7 @@ export function LibraryPanel({
                 </p>
               </div>
             ) : (
-              <div className="flex flex-col gap-1 pr-2">
+              <div className="flex w-full max-w-full flex-col gap-1">
                 {orgs.map((org) => (
                   <OrgBranch
                     key={org.id}
@@ -288,7 +294,7 @@ export function LibraryPanel({
                 ))}
               </div>
             )}
-          </ScrollArea>
+          </div>
         </section>
       )}
 
@@ -403,7 +409,7 @@ function OrgBranch({
 }) {
   const active = selection.kind !== "none" && selection.organizationId === org.id && selection.kind === "organization";
   return (
-    <div>
+    <div className="w-full max-w-full min-w-0">
       <TreeButton
         active={active}
         indent={0}
@@ -419,7 +425,7 @@ function OrgBranch({
         }
       />
       {expanded ? (
-        <div className="ml-2">
+        <div className="w-full max-w-full min-w-0">
           {org.topics.map((topic) => (
             <TopicBranch
               key={topic.id}
@@ -436,8 +442,8 @@ function OrgBranch({
           ))}
           <button
             type="button"
-            className="mt-0.5 flex items-center gap-1 rounded-lg px-2 py-1 text-[12px] text-muted-foreground hover:text-foreground"
-            style={{ marginLeft: 14 }}
+            className="mt-0.5 flex max-w-full items-center gap-1 rounded-lg px-2 py-1 text-[12px] text-muted-foreground hover:text-foreground"
+            style={{ paddingLeft: 8 + 14 }}
             onClick={onCreateTopic}
           >
             <Plus className="size-3" />
@@ -473,7 +479,7 @@ function TopicBranch({
   const active =
     (selection.kind === "topic" || selection.kind === "group") && selection.topicId === topic.id && selection.kind === "topic";
   return (
-    <div>
+    <div className="w-full max-w-full min-w-0">
       <TreeButton
         active={active}
         indent={1}
@@ -504,8 +510,8 @@ function TopicBranch({
           ))}
           <button
             type="button"
-            className="mt-0.5 flex items-center gap-1 rounded-lg px-2 py-1 text-[12px] text-muted-foreground hover:text-foreground"
-            style={{ marginLeft: 28 }}
+            className="mt-0.5 flex max-w-full items-center gap-1 rounded-lg px-2 py-1 text-[12px] text-muted-foreground hover:text-foreground"
+            style={{ paddingLeft: 8 + 28 }}
             onClick={onCreateGroup}
           >
             <Plus className="size-3" />

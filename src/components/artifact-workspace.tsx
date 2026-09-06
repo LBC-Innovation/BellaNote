@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Check, ChevronDown, ChevronLeft, FileAudio, FileText, FileUp, Link2, Link2Off, ListChecks, Loader2, Pause, Pencil, Play, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, FileAudio, FileText, FileUp, Link2, Link2Off, ListChecks, Loader2, Pause, Pencil, Play, Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ImportDropDialog } from "@/components/import-drop-dialog";
@@ -8,6 +8,13 @@ import { StaticWaveform } from "@/components/static-waveform";
 import { WorkspaceCard } from "@/components/workspace-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import * as api from "@/lib/api";
@@ -695,6 +702,104 @@ function FailedTranscript({ artifact }: { artifact: Artifact }) {
   );
 }
 
+const PLAYBACK_RATES = [1, 1.25, 1.5, 2] as const;
+type PlaybackRate = (typeof PLAYBACK_RATES)[number];
+const PLAYBACK_RATE_KEY = "bellanote.playbackRate";
+
+function isPlaybackRate(value: number): value is PlaybackRate {
+  return (PLAYBACK_RATES as readonly number[]).includes(value);
+}
+
+function readPlaybackRate(): PlaybackRate {
+  try {
+    const raw = Number(localStorage.getItem(PLAYBACK_RATE_KEY));
+    return isPlaybackRate(raw) ? raw : 1;
+  } catch {
+    return 1;
+  }
+}
+
+function formatPlaybackRate(rate: PlaybackRate) {
+  return `${rate}x`;
+}
+
+function PlaybackToolbar({
+  disabled,
+  playing,
+  followPlayback,
+  playbackRate,
+  currentTimeMs,
+  durationMs,
+  onTogglePlay,
+  onToggleFollow,
+  onPlaybackRateChange,
+}: {
+  disabled: boolean;
+  playing: boolean;
+  followPlayback: boolean;
+  playbackRate: PlaybackRate;
+  currentTimeMs: number;
+  durationMs: number;
+  onTogglePlay: () => void;
+  onToggleFollow: () => void;
+  onPlaybackRateChange: (rate: PlaybackRate) => void;
+}) {
+  return (
+    <div className="mt-2 flex items-center gap-1.5">
+      <Button
+        size="icon-sm"
+        variant="secondary"
+        disabled={disabled}
+        aria-label={playing ? "Pause" : "Play"}
+        onClick={onTogglePlay}
+      >
+        {playing ? <Pause /> : <Play />}
+      </Button>
+      <Button
+        size="sm"
+        variant={followPlayback ? "secondary" : "ghost"}
+        aria-pressed={followPlayback}
+        aria-label={followPlayback ? "Stop following playback" : "Follow playback in the transcript"}
+        onClick={onToggleFollow}
+      >
+        {followPlayback ? <Link2 /> : <Link2Off />}
+        Follow
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-label={`Playback speed ${formatPlaybackRate(playbackRate)}`}
+          >
+            {formatPlaybackRate(playbackRate)}
+            <ChevronDown />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="min-w-28">
+          <DropdownMenuRadioGroup
+            value={String(playbackRate)}
+            onValueChange={(value) => {
+              const next = Number(value);
+              if (isPlaybackRate(next)) onPlaybackRateChange(next);
+            }}
+          >
+            {PLAYBACK_RATES.map((rate) => (
+              <DropdownMenuRadioItem key={rate} value={String(rate)}>
+                {formatPlaybackRate(rate)}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <p className="ml-auto shrink-0 whitespace-nowrap font-mono text-[11px] tabular-nums">
+        {formatTimestamp(currentTimeMs)}
+        <span className="text-muted-foreground"> / {formatTimestamp(durationMs)}</span>
+      </p>
+    </div>
+  );
+}
+
 function ArtifactDetail({ artifact }: { artifact: Artifact }) {
   const segments = useMemo(() => parseSegments(artifact.segmentsJson), [artifact.segmentsJson]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -705,12 +810,30 @@ function ArtifactDetail({ artifact }: { artifact: Artifact }) {
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [followPlayback, setFollowPlayback] = useState(true);
+  const [playbackRate, setPlaybackRate] = useState<PlaybackRate>(readPlaybackRate);
   const [audioDurationMs, setAudioDurationMs] = useState(artifact.durationMs);
+  const [transcriptQuery, setTranscriptQuery] = useState("");
 
   const activeIndex = useMemo(
     () => activeSegmentIndex(segments, currentTimeMs),
     [segments, currentTimeMs],
   );
+  const normalizedQuery = transcriptQuery.trim().toLowerCase();
+  const visibleSegments = useMemo(() => {
+    const indexed = segments.map((seg, index) => ({ seg, index }));
+    if (!normalizedQuery) return indexed;
+    return indexed.filter(({ seg }) => seg.text.toLowerCase().includes(normalizedQuery));
+  }, [segments, normalizedQuery]);
+  const transcriptLines = useMemo(
+    () => artifact.transcript.split(/\n/).filter((line) => line.trim().length > 0),
+    [artifact.transcript],
+  );
+  const visibleTranscriptLines = useMemo(() => {
+    if (!normalizedQuery) return transcriptLines;
+    return transcriptLines.filter((line) => line.toLowerCase().includes(normalizedQuery));
+  }, [transcriptLines, normalizedQuery]);
+  const canSearchTranscript =
+    artifact.status === "ready" && (segments.length > 0 || transcriptLines.length > 0);
 
   useEffect(() => {
     let cancelled = false;
@@ -719,6 +842,7 @@ function ArtifactDetail({ artifact }: { artifact: Artifact }) {
     setProgress(0);
     setCurrentTimeMs(0);
     setPlaying(false);
+    setTranscriptQuery("");
     setAudioDurationMs(artifact.durationMs);
     if (!artifact.hasAudio) return;
     void api.getArtifactAudioPath(artifact.id).then(async (path) => {
@@ -750,27 +874,33 @@ function ArtifactDetail({ artifact }: { artifact: Artifact }) {
       setProgress(duration ? audio.currentTime / duration : 0);
       syncDuration();
     };
+    const applyRate = () => {
+      audio.playbackRate = playbackRate;
+    };
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
     audio.addEventListener("loadedmetadata", syncDuration);
+    audio.addEventListener("loadedmetadata", applyRate);
     audio.addEventListener("durationchange", syncDuration);
     audio.addEventListener("timeupdate", onTime);
     audio.addEventListener("play", onPlay);
     audio.addEventListener("pause", onPause);
     syncDuration();
+    applyRate();
     return () => {
       audio.removeEventListener("loadedmetadata", syncDuration);
+      audio.removeEventListener("loadedmetadata", applyRate);
       audio.removeEventListener("durationchange", syncDuration);
       audio.removeEventListener("timeupdate", onTime);
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("pause", onPause);
     };
-  }, [audioUrl, artifact.durationMs]);
+  }, [audioUrl, artifact.durationMs, playbackRate]);
 
   useEffect(() => {
-    if (!followPlayback || activeIndex < 0) return;
+    if (!followPlayback || activeIndex < 0 || normalizedQuery) return;
     lineRefs.current[activeIndex]?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [activeIndex, followPlayback]);
+  }, [activeIndex, followPlayback, normalizedQuery]);
 
   function seek(ratio: number) {
     const audio = audioRef.current;
@@ -788,54 +918,44 @@ function ArtifactDetail({ artifact }: { artifact: Artifact }) {
     setCurrentTimeMs(ms);
   }
 
+  function changePlaybackRate(rate: PlaybackRate) {
+    setPlaybackRate(rate);
+    try {
+      localStorage.setItem(PLAYBACK_RATE_KEY, String(rate));
+    } catch {
+      /* ignore quota / private mode */
+    }
+    if (audioRef.current) audioRef.current.playbackRate = rate;
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {artifact.hasAudio ? (
         <div className="shrink-0">
           {audioUrl ? <audio ref={audioRef} src={audioUrl} className="hidden" /> : null}
-          <div className="flex items-center gap-3">
-            <Button
-              size="icon-sm"
-              variant="secondary"
-              disabled={!audioUrl}
-              onClick={() => {
-                const audio = audioRef.current;
-                if (!audio) return;
-                if (audio.paused) void audio.play();
-                else audio.pause();
-              }}
-            >
-              {playing ? <Pause /> : <Play />}
-            </Button>
-            <div className="min-w-0 flex-1">
-              {peaks.length > 0 ? (
-                <StaticWaveform peaks={peaks} progress={progress} onSeek={seek} />
-              ) : (
-                <div className="flex h-20 items-center rounded-2xl bg-black/20 px-4 text-sm text-muted-foreground">
-                  Preparing waveform…
-                </div>
-              )}
+          {peaks.length > 0 ? (
+            <StaticWaveform peaks={peaks} progress={progress} onSeek={seek} />
+          ) : (
+            <div className="flex h-20 items-center rounded-2xl bg-black/20 px-4 text-sm text-muted-foreground">
+              Preparing waveform…
             </div>
-            <button
-              type="button"
-              aria-pressed={followPlayback}
-              aria-label={followPlayback ? "Stop following playback" : "Follow playback in the transcript"}
-              onClick={() => setFollowPlayback((value) => !value)}
-              className={cn(
-                "flex shrink-0 flex-col items-center gap-1 rounded-xl bg-white/[0.07] px-2.5 py-2 transition-colors hover:bg-white/[0.11]",
-                followPlayback ? "text-foreground" : "text-muted-foreground",
-              )}
-            >
-              <span className="font-mono text-[11px] tabular-nums">
-                {formatTimestamp(currentTimeMs)}
-                <span className="text-muted-foreground"> / {formatTimestamp(audioDurationMs || artifact.durationMs)}</span>
-              </span>
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium">
-                {followPlayback ? <Link2 className="size-3" /> : <Link2Off className="size-3" />}
-                Follow
-              </span>
-            </button>
-          </div>
+          )}
+          <PlaybackToolbar
+            disabled={!audioUrl}
+            playing={playing}
+            followPlayback={followPlayback}
+            playbackRate={playbackRate}
+            currentTimeMs={currentTimeMs}
+            durationMs={audioDurationMs || artifact.durationMs}
+            onTogglePlay={() => {
+              const audio = audioRef.current;
+              if (!audio) return;
+              if (audio.paused) void audio.play();
+              else audio.pause();
+            }}
+            onToggleFollow={() => setFollowPlayback((value) => !value)}
+            onPlaybackRateChange={changePlaybackRate}
+          />
         </div>
       ) : (
         <p className="shrink-0 text-sm text-muted-foreground">No waveform — this meeting is transcript only.</p>
@@ -851,37 +971,78 @@ function ArtifactDetail({ artifact }: { artifact: Artifact }) {
         ) : artifact.status === "failed" ? (
           <FailedTranscript artifact={artifact} />
         ) : segments.length > 0 ? (
+          visibleSegments.length > 0 ? (
+            <div className="flex flex-col gap-1 py-0.5 pr-2">
+              {visibleSegments.map(({ seg, index }) => (
+                <button
+                  key={`${seg.start_ms}-${index}`}
+                  ref={(node) => {
+                    lineRefs.current[index] = node;
+                  }}
+                  type="button"
+                  className={cn(
+                    "w-full appearance-none rounded-xl border text-left transition-colors",
+                    index === activeIndex
+                      ? "border-primary/40 bg-primary/18"
+                      : "border-transparent hover:bg-white/5",
+                  )}
+                  onClick={() => seekMs(seg.start_ms)}
+                >
+                  <span className="block px-4 py-2.5 text-sm leading-6">
+                    {seg.start_ms > 0 ? (
+                      <span className="mr-2 font-mono text-[11px] text-primary">
+                        {formatTimestamp(seg.start_ms)}
+                      </span>
+                    ) : null}
+                    {seg.text}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="px-1 py-6 text-center text-sm text-muted-foreground">
+              No lines match “{transcriptQuery.trim()}”
+            </p>
+          )
+        ) : visibleTranscriptLines.length > 0 ? (
           <div className="flex flex-col gap-1 py-0.5 pr-2">
-            {segments.map((seg, index) => (
-              <button
-                key={`${seg.start_ms}-${index}`}
-                ref={(node) => {
-                  lineRefs.current[index] = node;
-                }}
-                type="button"
-                className={cn(
-                  "w-full appearance-none rounded-xl border text-left transition-colors",
-                  index === activeIndex
-                    ? "border-primary/40 bg-primary/18"
-                    : "border-transparent hover:bg-white/5",
-                )}
-                onClick={() => seekMs(seg.start_ms)}
-              >
-                <span className="block px-4 py-2.5 text-sm leading-6">
-                  {seg.start_ms > 0 ? (
-                    <span className="mr-2 font-mono text-[11px] text-primary">
-                      {formatTimestamp(seg.start_ms)}
-                    </span>
-                  ) : null}
-                  {seg.text}
-                </span>
-              </button>
+            {visibleTranscriptLines.map((line, index) => (
+              <p key={`${index}-${line.slice(0, 24)}`} className="px-4 py-2.5 text-sm leading-6">
+                {line}
+              </p>
             ))}
           </div>
+        ) : artifact.transcript.trim() && normalizedQuery ? (
+          <p className="px-1 py-6 text-center text-sm text-muted-foreground">
+            No lines match “{transcriptQuery.trim()}”
+          </p>
         ) : (
           <p className="whitespace-pre-wrap text-sm leading-relaxed">{artifact.transcript}</p>
         )}
       </ScrollArea>
+
+      {canSearchTranscript ? (
+        <div className="relative mt-2 shrink-0">
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={transcriptQuery}
+            onChange={(event) => setTranscriptQuery(event.target.value)}
+            placeholder="Search transcript"
+            aria-label="Search transcript"
+            className={cn("pl-8", transcriptQuery ? "pr-8" : null)}
+          />
+          {transcriptQuery ? (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => setTranscriptQuery("")}
+              className="absolute top-1/2 right-1.5 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+            >
+              <X className="size-3.5" />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

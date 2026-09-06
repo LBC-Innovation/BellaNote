@@ -1,7 +1,7 @@
 # BellaNote — First-slice user stories
 
 **Document status:** First Mac slice implemented — stories rewritten to the shipped app, not the original draft  
-**Last review:** 5 September 2026 (workspace polish: multi-file import, retry, rails, transcript chips / timeclock)  
+**Last review:** 6 September 2026 (layout focus buttons + pane animation, player toolbar / speed, transcript search)  
 **Platform:** macOS desktop app (Tauri 2)  
 **Slice goal:** A student (or anyone with a similar hierarchy) can create an organization and topic categories, file audio and existing transcripts into meeting groups, and ask natural-language questions against a chosen scope.
 
@@ -72,7 +72,7 @@ Duke                          ← Organization
 | Upload one or more audio files → one-shot `small.en` on device; queue extras | YouTube URL ingest |
 | Import one or more `.vtt` / `.srt` / `.txt` | Audience-aware summaries, task extraction |
 | View artifacts in the hierarchy; remove one or many with confirm | Move an artifact between groups (US-205, not started) |
-| Static waveform + click-to-seek + playhead clock / Follow on audio artifacts | Sharing / multi-user backend |
+| Static waveform + click-to-seek; play / Follow / speed / clock under the waveform; search filters transcript lines | Sharing / multi-user backend |
 | ChatGPT (`gpt-4o`) with an explicit scope | Calendar, speaker diarization |
 | User-provided OpenAI API token in the keychain | Mobile |
 
@@ -97,6 +97,7 @@ Epic 2  Files & transcripts
         ~~US-204  Open and read an artifact~~               Complete
         US-205  Re-file / move an artifact                 Not started
         ~~US-206  Remove an artifact~~                      Complete
+        ~~US-207  Search within a transcript~~              Complete
 
 Epic 3  Scoped chat
         ~~US-301  Save the ChatGPT API token~~              Complete
@@ -121,6 +122,7 @@ Epic 3  Scoped chat
 **Acceptance**
 
 - A standard macOS Tauri app launches to a local three-pane workspace (Library, Transcript, Chat).  
+- The titlebar has layout buttons (Library only / Transcript only / Chat only) and Settings. The empty middle strip is the window drag region so those buttons stay clickable under the macOS overlay traffic lights.  
 - No sign-in is required.  
 - First launch shows an empty library (“Start with an organization”) and a workspace prompt to create an organization.  
 - Closing and reopening restores organizations, topics, groups, and artifacts from local SQLite.  
@@ -327,6 +329,7 @@ Epic 3  Scoped chat
 - The workspace header breadcrumb shows the path (e.g. Duke / Competitive Strategies / Lecture Class 1).  
 - Selecting an org or topic shows a teaching empty state; selecting a group shows that group’s files.  
 - Library, transcript, and chat panes each collapse to a vertical rail (click the rail to expand). Rail state persists.  
+- Titlebar **Library only / Transcript only / Chat only** focuses that pane and collapses the other two to rails. Pane widths animate to the new layout instead of jumping.  
 - Empty levels have a useful empty state, not a blank panel.
 
 ### Scenarios
@@ -365,7 +368,16 @@ Epic 3  Scoped chat
 - **Given** I am reading a transcript and chatting  
 - **When** I collapse Library, Transcript, or Chat  
 - **Then** that pane becomes a labeled rail  
-- **And** the remaining panes take the leftover space
+- **And** the remaining panes take the leftover space  
+- **And** the widths ease into place instead of snapping
+
+**Focus one pane from the titlebar**
+
+- **Given** all three panes are open  
+- **When** I click **Show transcript only**  
+- **Then** Library and Chat become rails  
+- **And** Transcript fills the leftover space  
+- **And** the transcript layout button stays pressed until I expand another pane
 
 ---
 
@@ -666,9 +678,9 @@ Epic 3  Scoped chat
 - Files table columns: file title + original filename, date added, quality.  
 - The Transcript card header shows chips for what that file actually has: **Audio** only if `has_audio`, **Transcript** only when status is Ready and text exists. An imported `.vtt` does not get an Audio chip.  
 - Ready and failed rows can be selected (outlined card). Pending rows are amber and not loadable. Importing rows are not loadable; a click shows the wait toast (US-202).  
-- Ready audio artifacts show a static waveform, play/pause, and click-to-seek. A separate rounded timeclock (not docked into the waveform) shows **playhead / total** and a **Follow** label. Clicking anywhere on the timeclock toggles playback↔transcript sync.  
+- Ready audio artifacts show a full-width static waveform and click-to-seek. A control row **under** the waveform has play/pause, **Follow**, a playback-speed menu (**1x / 1.25x / 1.5x / 2x**, remembered), and a playhead / total clock. Follow is its own button; the clock is display-only.  
 - Imported transcripts have no waveform.  
-- Long transcripts scroll in the transcript card.  
+- Long transcripts scroll in the transcript card. A **Search transcript** field under the lines filters them as I type (US-207).  
 - Inline rename (pencil) and delete (trash) sit on each row. **Select multiple** (checkboxes on the right, same slot as edit/delete) appears only while the Files accordion is open.
 
 ### Scenarios
@@ -700,15 +712,22 @@ Epic 3  Scoped chat
 - **Given** a ready audio artifact is selected  
 - **When** I press play or click the waveform  
 - **Then** playback seeks to that point  
-- **And** the timeclock shows the current playhead and the total length  
+- **And** the clock under the waveform shows the current playhead and the total length  
 - **And** the matching transcript line highlights if Follow is on
 
-**Toggle Follow from the timeclock**
+**Toggle Follow**
 
 - **Given** a ready audio artifact is playing  
-- **When** I click the timeclock  
+- **When** I click **Follow** on the control row  
 - **Then** Follow turns off (or on again)  
 - **And** transcript auto-scroll stops when Follow is off
+
+**Change playback speed**
+
+- **Given** a ready audio artifact is selected  
+- **When** I open the speed menu and choose **1.5x**  
+- **Then** playback runs at one-and-a-half speed  
+- **And** the next file I open still starts at 1.5x
 
 **Rename artifact**
 
@@ -796,6 +815,46 @@ Epic 3  Scoped chat
 - **When** I choose Select multiple, check two rows, and confirm Delete  
 - **Then** those two are gone  
 - **And** the third remains
+
+---
+
+## ~~US-207 — Search within a transcript~~
+
+**Status:** Complete
+
+**As a** student,  
+**I want** to type into a search field and see only the transcript lines that match,  
+**so that** I can jump to a phrase in a long lecture without scrolling the whole file.
+
+**Acceptance**
+
+- Ready transcripts show a **Search transcript** field under the scrollable lines (not over the waveform).  
+- Typing filters lines immediately (case-insensitive substring on the line text).  
+- A clear control restores the full list. Switching to another file clears the query.  
+- When nothing matches, the list says so.  
+- Follow does not auto-scroll the list while a query is active, so the filtered results stay put. Clicking a visible timestamped line still seeks the audio.
+
+### Scenarios
+
+**Filter as I type**
+
+- **Given** Lecture 1’s transcript is open with several lines  
+- **When** I type `strategy` in **Search transcript**  
+- **Then** only lines that contain that word remain  
+- **And** unmatched lines are hidden
+
+**No matches**
+
+- **Given** I am searching the same transcript  
+- **When** I type a word that does not appear  
+- **Then** I see that no lines match  
+- **And** the search field still shows what I typed
+
+**Clear search**
+
+- **Given** the list is filtered  
+- **When** I clear the search  
+- **Then** every line is visible again
 
 ---
 
@@ -1104,11 +1163,11 @@ Epic 3  Scoped chat
 **Acceptance**
 
 - Three panes: Library | Transcript workspace | Chat.  
-- Library, transcript, and chat each collapse to a vertical rail. Collapse state persists. When the transcript rail is collapsed, Chat grows; when Chat is collapsed, the transcript takes the leftover space.  
+- Library, transcript, and chat each collapse to a vertical rail. Collapse state persists. When the transcript rail is collapsed, Chat grows; when Chat is collapsed, the transcript takes the leftover space. Titlebar layout buttons focus one pane; widths animate.  
 - Chat is a first-class pane, not a modal.  
 - Empty states teach the next click.  
 - Dark charcoal / mint glass is the shipped theme (no light theme in this slice).  
-- Meeting-group workspace uses stacked Files and Transcript cards, not a single dump. The Transcript header uses Audio / Transcript chips instead of a static “Audio + transcript” label.
+- Meeting-group workspace uses stacked Files and Transcript cards, not a single dump. The Transcript header uses Audio / Transcript chips instead of a static “Audio + transcript” label. Audio controls sit under the waveform; transcript search sits under the lines.
 
 ### Scenarios
 
@@ -1129,7 +1188,15 @@ Epic 3  Scoped chat
 - **Given** Chat is open  
 - **When** I collapse it  
 - **Then** it becomes a Chat rail  
-- **And** the transcript workspace uses the extra width
+- **And** the transcript workspace uses the extra width  
+- **And** the panes animate to those widths
+
+**Focus chat from the titlebar**
+
+- **Given** Library, Transcript, and Chat are open  
+- **When** I click **Show chat only**  
+- **Then** Library and Transcript become rails  
+- **And** Chat fills the leftover space
 
 ---
 
@@ -1144,7 +1211,7 @@ Epic 3  Scoped chat
 | D5 | Video (`mp4`) in this slice | **Reject, ask for audio** | Extract-audio can be next. |
 | D6 | Undo after delete | **No undo; confirm instead** | Confirm always, including empty containers. |
 | D7 | Org-wide chat when there are dozens of transcripts | **Newest groups first, ~110k character budget, show omitted count** | Expandable file list is still open (US-305). |
-| D8 | Playback of source audio | **Shipped** | Static waveform, click-to-seek, playhead/total timeclock, Follow on the clock. |
+| D8 | Playback of source audio | **Shipped** | Waveform with click-to-seek; play, Follow, speed (1x–2x), and playhead/total clock on a row under the waveform. |
 | D9 | Persist chat threads per scope | **Yes — one thread per scope** | New thread replaces; no archive list (US-304). |
 | D10 | Independent org/topic tags (from product scope) | **Not in this slice** | Real tree: Org → Topic → Group → Artifact. |
 
@@ -1152,7 +1219,7 @@ Epic 3  Scoped chat
 
 # Suggested next work
 
-Shipped: US-101–107, US-201–204, US-206, US-301, US-302, US-401, US-402.
+Shipped: US-101–107, US-201–204, US-206, US-207, US-301, US-302, US-401, US-402.
 
 Still open from this slice:
 
@@ -1175,6 +1242,7 @@ Then the product-scope work that was always out of this slice: live capture, Win
 | Upload audio provided after the fact | US-201, US-202 |
 | Recordings I made while I was there (as files) | US-201 |
 | Transcripts downloaded from Zoom | US-203 |
+| Find a phrase in a long transcript | US-207 |
 | Ask NL questions with org / topic / group / one-file scope | US-302, US-305 |
 | Well-organized answer UI | US-303, US-402 |
 | ChatGPT API token we provide | US-301 |
