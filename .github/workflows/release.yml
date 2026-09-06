@@ -53,17 +53,49 @@ jobs:
       - name: Bundle Python whisper worker
         run: bash scripts/build_whisper_sidecar.sh ${{ matrix.rust-target }}
 
-      - name: Build installer and attach to GitHub Release
-        uses: tauri-apps/tauri-action@v1
+      # Tauri treats a *present* APPLE_CERTIFICATE as “import this .p12”, even
+      # when the value is empty. Missing GitHub secrets become "" — not unset —
+      # so exporting them unconditionally makes `security import` fail and no
+      # .dmg is produced. Only write these into GITHUB_ENV when a real cert exists.
+      - name: Export Apple signing secrets
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ENABLE_CODE_SIGNING: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ]; then
+            echo "No Apple Developer certificate — building an unsigned .dmg."
+            exit 0
+          fi
+          {
+            echo "ENABLE_CODE_SIGNING=true"
+            echo "APPLE_CERTIFICATE<<EOF"
+            echo "$APPLE_CERTIFICATE"
+            echo "EOF"
+            echo "APPLE_CERTIFICATE_PASSWORD<<EOF"
+            echo "$APPLE_CERTIFICATE_PASSWORD"
+            echo "EOF"
+            echo "APPLE_SIGNING_IDENTITY<<EOF"
+            echo "$APPLE_SIGNING_IDENTITY"
+            echo "EOF"
+            echo "APPLE_ID<<EOF"
+            echo "$APPLE_ID"
+            echo "EOF"
+            echo "APPLE_PASSWORD<<EOF"
+            echo "$APPLE_PASSWORD"
+            echo "EOF"
+            echo "APPLE_TEAM_ID<<EOF"
+            echo "$APPLE_TEAM_ID"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Build installer and attach to GitHub Release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: v__VERSION__
           releaseName: "BellaNote v__VERSION__"

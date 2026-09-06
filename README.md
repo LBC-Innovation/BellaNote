@@ -216,9 +216,35 @@ The **Release** workflow (`.github/workflows/release.yml`) freezes the whisper w
 2. Either push a tag that matches `tauri.conf.json` (`git tag v0.1.0-beta.1 && git push origin v0.1.0-beta.1`) or run **Actions → Release → Run workflow**. The draft tag is always `v` plus the version in `tauri.conf.json` (`v__VERSION__`).
 3. When both macOS jobs finish, open the draft release, download the `.dmg` that matches the Mac, and publish the release when you are ready.
 
-The workflow signs and notarizes only if Apple certificate secrets are set (`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, and the Apple ID / team fields). Without them it still uploads unsigned installers.
-
 If the job cannot create a release, set the repo **Actions** workflow permission to **Read and write**.
+
+### Signing decision — unsigned early beta
+
+**Current choice: ship unsigned `.dmg` files.** This prototype does not use an Apple Developer Program membership. A paid Developer ID certificate is not required to share a build with a small tester group.
+
+Testers install the matching `.dmg` (Apple Silicon vs Intel), drag BellaNote into Applications, then **right-click → Open → Open** the first time. Gatekeeper blocks unsigned downloads; that second Open is the workaround. Skip notarization until you want “double-click and it just works” for people you do not sit next to.
+
+**Do not create empty Apple signing secrets.** Tauri treats a *present* `APPLE_CERTIFICATE` environment variable as “import this certificate,” even when the value is `""`. GitHub Actions turns a missing secret into an empty string (not unset), so the old workflow failed at `security import` / `SecKeychainItemImport` after a successful compile, and no `.dmg` was uploaded. The Release workflow now exports `APPLE_*` only when `APPLE_CERTIFICATE` is actually set.
+
+#### When you enroll as an Apple developer
+
+After joining the Apple Developer Program (~$99/year) and creating a **Developer ID Application** certificate:
+
+1. Export the certificate as a `.p12`, then base64-encode it.
+2. Add these repository secrets (Settings → Secrets and variables → Actions). Leave them unset until every value is real:
+
+   | Secret | What it is |
+   | ------ | ---------- |
+   | `APPLE_CERTIFICATE` | Base64-encoded `.p12` |
+   | `APPLE_CERTIFICATE_PASSWORD` | Password for that `.p12` |
+   | `APPLE_SIGNING_IDENTITY` | Exact name of the Developer ID identity in Keychain |
+   | `APPLE_ID` | Apple ID email used for notarization |
+   | `APPLE_PASSWORD` | App-specific password for that Apple ID |
+   | `APPLE_TEAM_ID` | 10-character Team ID |
+
+3. Re-run **Actions → Release**. The “Export Apple signing secrets” step will start writing those variables, and Tauri will sign and notarize. No workflow edit is required once the secrets exist.
+
+Until those secrets are in place, every Release job should log `No Apple Developer certificate — building an unsigned .dmg.` and still attach installers.
 
 ### Environment
 
