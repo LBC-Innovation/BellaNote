@@ -8,6 +8,7 @@ export type QualityKind =
   | "large"
   | "imported"
   | "importing"
+  | "recording"
   | "pending"
   | "failed"
   | "unknown";
@@ -20,6 +21,10 @@ export function isImportingArtifact(artifact: Artifact) {
   return artifact.status === "transcribing";
 }
 
+export function isRecordingArtifact(artifact: Artifact) {
+  return artifact.status === "recording";
+}
+
 export function isFailedArtifact(artifact: Artifact) {
   return artifact.status === "failed";
 }
@@ -29,6 +34,9 @@ export function isLoadableArtifact(artifact: Artifact) {
 }
 
 export function transcriptionQuality(artifact: Artifact): { kind: QualityKind; label: string } {
+  if (artifact.status === "recording") {
+    return { kind: "recording", label: "Recording" };
+  }
   if (artifact.status === "queued") {
     return { kind: "pending", label: "Pending" };
   }

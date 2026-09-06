@@ -31,10 +31,11 @@ export type Artifact = {
   id: string;
   meetingGroupId: string;
   title: string;
-  sourceType: "audio_upload" | "transcript_import" | string;
-  status: "queued" | "transcribing" | "ready" | "failed" | string;
+  sourceType: "audio_upload" | "transcript_import" | "voice" | "system" | string;
+  status: "queued" | "transcribing" | "ready" | "failed" | "recording" | string;
   hasAudio: boolean;
   originalFilename: string;
+  originalPath?: string;
   errorMessage: string;
   transcript: string;
   segmentsJson: string;

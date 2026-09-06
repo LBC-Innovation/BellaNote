@@ -71,6 +71,7 @@ pub fn import_audio(app: &AppHandle, state: &Arc<AppState>, meeting_group_id: &s
         status: "queued".into(),
         has_audio: true,
         original_filename: filename,
+        original_path: source.to_string_lossy().into_owned(),
         error_message: String::new(),
         transcript: String::new(),
         segments_json: "[]".into(),
@@ -85,7 +86,7 @@ pub fn import_audio(app: &AppHandle, state: &Arc<AppState>, meeting_group_id: &s
 
 pub fn retry_artifact(app: &AppHandle, state: &Arc<AppState>, id: &str) -> AppResult<Artifact> {
     let artifact = state.db.get_artifact(id)?;
-    if artifact.status == "queued" || artifact.status == "transcribing" {
+    if artifact.status == "queued" || artifact.status == "transcribing" || artifact.status == "recording" {
         return Err(AppError::Message("This file is already importing.".into()));
     }
     if artifact.status != "failed" {
@@ -142,6 +143,7 @@ pub fn import_transcript_file(
         status: "ready".into(),
         has_audio: false,
         original_filename: filename,
+        original_path: source.to_string_lossy().into_owned(),
         error_message: String::new(),
         transcript: full,
         segments_json,
@@ -157,6 +159,23 @@ pub fn delete_artifact_files(app: &AppHandle, id: &str) {
     if let Ok(dir) = paths::artifact_dir(app, id) {
         let _ = std::fs::remove_dir_all(dir);
     }
+}
+
+/// Deletes the user's original import, never anything inside BellaNote's library.
+pub fn delete_original_source(library: &Path, original: &str) {
+    if original.is_empty() {
+        return;
+    }
+    let path = Path::new(original);
+    if !path.is_file() {
+        return;
+    }
+    if let (Ok(file), Ok(lib)) = (path.canonicalize(), library.canonicalize()) {
+        if file.starts_with(&lib) {
+            return;
+        }
+    }
+    let _ = std::fs::remove_file(path);
 }
 
 pub fn find_audio_path(app: &AppHandle, id: &str) -> Option<PathBuf> {

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Check, ChevronDown, ChevronLeft, FileAudio, FileText, FileUp, Link2, Link2Off, ListChecks, Loader2, MessageSquarePlus, Pause, Pencil, Play, Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, FileAudio, FileText, FileUp, Link2, Link2Off, ListChecks, Loader2, MessageSquarePlus, Mic, MonitorSpeaker, Pause, Pencil, Play, Plus, RotateCcw, Search, Square, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ImportDropDialog } from "@/components/import-drop-dialog";
+import { LiveMeter } from "@/components/live-meter";
 import { StaticWaveform } from "@/components/static-waveform";
+import { revokePlaybackUrl, urlForStereoPlayback } from "@/lib/stereoPlayback";
 import { forgetWaveformPeaks, loadWaveformPeaks, peekWaveformPeaks } from "@/lib/waveformPeaks";
 import { WorkspaceCard } from "@/components/workspace-card";
 import { Badge } from "@/components/ui/badge";
@@ -20,10 +22,11 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import * as api from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
-import { formatAddedDate, isFailedArtifact, isImportingArtifact, isLoadableArtifact, isPendingArtifact, transcriptionQuality, type QualityKind } from "@/lib/quality";
+import { formatAddedDate, isFailedArtifact, isImportingArtifact, isLoadableArtifact, isPendingArtifact, isRecordingArtifact, transcriptionQuality, type QualityKind } from "@/lib/quality";
 import { formatTimestamp, parseSegments } from "@/lib/segments";
 import { cn } from "@/lib/utils";
 import { useArtifactStore } from "@/store/useArtifactStore";
+import { useRecordingStore } from "@/store/useRecordingStore";
 import type { Artifact, ArtifactComment } from "@/lib/types";
 
 function hasTranscriptContent(artifact: Artifact) {
@@ -54,6 +57,7 @@ function ArtifactKindChips({ artifact }: { artifact: Artifact }) {
 
 function qualityBadge(kind: QualityKind) {
   if (kind === "failed") return "destructive" as const;
+  if (kind === "recording") return "default" as const;
   if (kind === "small" || kind === "medium" || kind === "large") return "default" as const;
   if (kind === "pending") return "outline" as const;
   return "secondary" as const;
@@ -72,7 +76,13 @@ function activeSegmentIndex(segments: { start_ms: number; end_ms: number }[], ti
   return last;
 }
 
-function ImportMeetingControl({ onPick }: { onPick: (kind: "audio" | "transcript") => void }) {
+function ImportMeetingControl({
+  onPick,
+  disabled,
+}: {
+  onPick: (kind: "audio" | "transcript") => void;
+  disabled?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -98,9 +108,10 @@ function ImportMeetingControl({ onPick }: { onPick: (kind: "audio" | "transcript
         type="button"
         aria-expanded={open}
         aria-haspopup="listbox"
+        disabled={disabled}
         onClick={() => setOpen((value) => !value)}
         className={cn(
-          "flex h-8 w-full cursor-pointer items-center gap-1.5 border border-white/20 bg-white/[0.06] px-2.5 text-[0.8rem] font-medium backdrop-blur-md transition-colors hover:bg-white/10",
+          "flex h-8 w-full cursor-pointer items-center gap-1.5 border border-white/20 bg-white/[0.06] px-2.5 text-[0.8rem] font-medium backdrop-blur-md transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50",
           open ? "rounded-t-xl rounded-b-none border-b-transparent" : "rounded-xl",
         )}
       >
@@ -143,6 +154,135 @@ function ImportMeetingControl({ onPick }: { onPick: (kind: "audio" | "transcript
   );
 }
 
+function formatRecDuration(ms: number) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(s).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+function RecordMeetingControl({
+  groupId,
+  disabled,
+}: {
+  groupId: string;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [now, setNow] = useState(Date.now());
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const active = useRecordingStore((s) => s.active);
+  const pending = useRecordingStore((s) => s.pending);
+  const startedAtUnixMs = useRecordingStore((s) => s.startedAtUnixMs);
+  const inputLabel = useRecordingStore((s) => s.inputLabel);
+  const systemAudioAvailable = useRecordingStore((s) => s.systemAudioAvailable);
+  const start = useRecordingStore((s) => s.start);
+  const stop = useRecordingStore((s) => s.stop);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: PointerEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!active) return;
+    const id = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, [active]);
+
+  async function pick(source: "voice" | "system") {
+    setOpen(false);
+    if (source === "system" && !systemAudioAvailable) {
+      toast.error("System audio capture is not available on Windows yet.");
+      return;
+    }
+    try {
+      await start(groupId, source);
+    } catch (err) {
+      toast.error(errorMessage(err));
+    }
+  }
+
+  if (active) {
+    const elapsed = startedAtUnixMs ? now - startedAtUnixMs : 0;
+    return (
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => {
+          void stop().catch((err) => toast.error(errorMessage(err)));
+        }}
+        className="flex h-8 w-48 shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-red-400/40 bg-red-500/15 px-2.5 text-[0.8rem] font-medium text-red-100 backdrop-blur-md transition-colors hover:bg-red-500/25"
+      >
+        <Square className="size-3.5 shrink-0 fill-current" />
+        <span className="min-w-0 flex-1 text-left">{`Stop · ${formatRecDuration(elapsed)}`}</span>
+      </button>
+    );
+  }
+
+  return (
+    <div ref={rootRef} className="relative w-48 shrink-0">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        disabled={disabled || pending}
+        onClick={() => setOpen((value) => !value)}
+        className={cn(
+          "flex h-8 w-full cursor-pointer items-center gap-1.5 border border-white/20 bg-white/[0.06] px-2.5 text-[0.8rem] font-medium backdrop-blur-md transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50",
+          open ? "rounded-t-xl rounded-b-none border-b-transparent" : "rounded-xl",
+        )}
+      >
+        <Mic className="size-3.5 shrink-0" />
+        <span className="min-w-0 flex-1 text-left">Record Meeting</span>
+        {open ? <ChevronDown className="size-3.5 shrink-0" /> : <ChevronLeft className="size-3.5 shrink-0" />}
+      </button>
+      {open ? (
+        <div
+          role="listbox"
+          className="absolute top-full left-0 z-30 w-full rounded-b-xl border border-t-0 border-white/20 bg-white/[0.06] p-1 backdrop-blur-md"
+        >
+          <button
+            type="button"
+            role="option"
+            className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-white/8"
+            onClick={() => void pick("voice")}
+          >
+            <Mic className="size-4 shrink-0" />
+            Microphone
+          </button>
+          <button
+            type="button"
+            role="option"
+            className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-white/8"
+            onClick={() => void pick("system")}
+          >
+            <MonitorSpeaker className="size-4 shrink-0" />
+            System audio
+          </button>
+        </div>
+      ) : null}
+      {inputLabel && !active ? (
+        <span className="sr-only">{inputLabel}</span>
+      ) : null}
+    </div>
+  );
+}
+
 export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; groupName: string }) {
   const artifacts = useArtifactStore((s) => s.artifacts);
   const activeId = useArtifactStore((s) => s.activeId);
@@ -165,6 +305,10 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
   const [commentSaving, setCommentSaving] = useState(false);
   const playheadMsRef = useRef(0);
   const commentInputRef = useRef<HTMLInputElement>(null);
+  const recordingActive = useRecordingStore((s) => s.active);
+  const recordingGroupId = useRecordingStore((s) => s.groupId);
+  const hydrateRecording = useRecordingStore((s) => s.hydrate);
+  const recordingHere = recordingActive && recordingGroupId === groupId;
 
   function showImportWait() {
     toast.warning("Please wait, this file is importing", {
@@ -174,6 +318,10 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
       richColors: true,
     });
   }
+
+  useEffect(() => {
+    void hydrateRecording();
+  }, [hydrateRecording]);
 
   useEffect(() => {
     setSelecting(false);
@@ -239,8 +387,19 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center justify-between gap-3">
         <h1 className="text-xl font-semibold tracking-tight">{groupName}</h1>
-        <ImportMeetingControl onPick={setImportKind} />
+        <div className="flex shrink-0 items-center gap-2">
+          <RecordMeetingControl groupId={groupId} disabled={recordingActive} />
+          <ImportMeetingControl onPick={setImportKind} disabled={recordingActive} />
+        </div>
       </div>
+      {recordingHere ? (
+        <div className="mt-3 flex flex-col gap-2">
+          <p className="text-xs text-muted-foreground">
+            You’re capturing audio on this device. Follow the recording laws where you are.
+          </p>
+          <LiveMeter active={recordingHere} />
+        </div>
+      ) : null}
 
       <div className="mt-4 flex min-h-0 flex-1 flex-col gap-3">
         <WorkspaceCard
@@ -335,7 +494,7 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
           )}
         </WorkspaceCard>
 
-        {active?.hasAudio && isLoadableArtifact(active) ? (
+        {active?.hasAudio && isLoadableArtifact(active) && !isRecordingArtifact(active) ? (
           <WorkspaceCard
             open={commentsOpen}
             onOpenChange={setCommentsOpen}
@@ -416,14 +575,22 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
       <ConfirmDialog
         open={Boolean(remove)}
         title={remove ? `Remove ${remove.title}?` : "Remove"}
-        description="This removes the file from BellaNote. The original on disk is left alone."
+        description="This removes the file from BellaNote."
+        extraOption={
+          remove?.hasAudio
+            ? remove.originalPath
+              ? `Also delete the original audio file (${remove.originalFilename})`
+              : "Also delete the audio file from this computer"
+            : undefined
+        }
         confirmLabel="Remove"
         onOpenChange={(open) => {
           if (!open) setRemove(null);
         }}
-        onConfirm={async () => {
+        onConfirm={async (deleteOriginal) => {
           if (!remove) return;
-          await api.deleteArtifact(remove.id);
+          if (activeId === remove.id) setActive(null);
+          await api.deleteArtifact(remove.id, deleteOriginal);
           forgetWaveformPeaks(remove.id);
           await load(groupId);
         }}
@@ -432,14 +599,20 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
       <ConfirmDialog
         open={removeMany}
         title={`Are you sure you want to delete ${selectedIds.length} ${selectedIds.length === 1 ? "file" : "files"}?`}
-        description="This removes the files from BellaNote. The originals on disk are left alone."
+        description="This removes the files from BellaNote."
+        extraOption={
+          artifacts.some((item) => selectedIds.includes(item.id) && item.hasAudio)
+            ? "Also delete the original audio files from this computer"
+            : undefined
+        }
         confirmLabel="Delete"
         onOpenChange={setRemoveMany}
-        onConfirm={async () => {
+        onConfirm={async (deleteOriginal) => {
           const ids = selectedIds;
           try {
+            if (activeId && ids.includes(activeId)) setActive(null);
             for (const id of ids) {
-              await api.deleteArtifact(id);
+              await api.deleteArtifact(id, deleteOriginal);
               forgetWaveformPeaks(id);
             }
             setSelectedIds([]);
@@ -603,6 +776,7 @@ function FileRow({
 }) {
   const quality = transcriptionQuality(item);
   const pending = isPendingArtifact(item);
+  const recording = isRecordingArtifact(item);
   const failed = isFailedArtifact(item);
   const blocked = !isLoadableArtifact(item);
   const [retrying, setRetrying] = useState(false);
@@ -667,6 +841,8 @@ function FileRow({
         filesGridClass,
         pending
           ? "border-dashed border-amber-400/40 bg-amber-400/[0.04] text-muted-foreground"
+          : recording
+            ? "border-dashed border-red-400/35 bg-red-500/[0.06]"
           : failed
             ? "border-dashed border-destructive/35 bg-destructive/[0.04]"
             : selecting && checked
@@ -719,7 +895,9 @@ function FileRow({
       </span>
       <span className="flex w-[10rem] items-center gap-1.5">
         <Badge variant={qualityBadge(quality.kind)} className="capitalize">
-          {quality.kind === "importing" ? <Loader2 className="animate-spin" /> : null}
+          {quality.kind === "importing" || quality.kind === "recording" ? (
+            <Loader2 className="animate-spin" />
+          ) : null}
           {quality.label}
         </Badge>
         {failed && item.hasAudio ? (
@@ -1118,6 +1296,7 @@ function ArtifactDetail({
 
   useEffect(() => {
     let cancelled = false;
+    let playbackUrl: string | null = null;
     setAudioUrl(null);
     const cachedPeaks = artifact.hasAudio ? peekWaveformPeaks(artifact.id) : undefined;
     setPeaks(cachedPeaks?.peaks ?? []);
@@ -1128,10 +1307,20 @@ function ArtifactDetail({
     setTranscriptQuery("");
     setAudioDurationMs(artifact.durationMs);
     playheadMsRef.current = 0;
-    if (!artifact.hasAudio) return;
-    void api.getArtifactAudioPath(artifact.id).then((path) => {
+    if (!artifact.hasAudio || artifact.status === "recording") {
+      return () => {
+        cancelled = true;
+      };
+    }
+    void api.getArtifactAudioPath(artifact.id).then(async (path) => {
       if (!path || cancelled) return;
-      setAudioUrl(convertFileSrc(path));
+      const playUrl = await urlForStereoPlayback(convertFileSrc(path));
+      if (cancelled) {
+        revokePlaybackUrl(playUrl);
+        return;
+      }
+      playbackUrl = playUrl;
+      setAudioUrl(playUrl);
     });
     void loadWaveformPeaks(artifact.id)
       .then((result) => {
@@ -1144,8 +1333,9 @@ function ArtifactDetail({
       });
     return () => {
       cancelled = true;
+      revokePlaybackUrl(playbackUrl);
     };
-  }, [artifact.id, artifact.hasAudio]);
+  }, [artifact.id, artifact.hasAudio, artifact.status]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -1238,7 +1428,7 @@ function ArtifactDetail({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {artifact.hasAudio ? (
+      {artifact.hasAudio && artifact.status !== "recording" ? (
         <div className="shrink-0">
           {audioUrl ? <audio ref={audioRef} src={audioUrl} className="hidden" /> : null}
           {peaks.length > 0 ? (

@@ -1,5 +1,6 @@
 mod artifacts;
 mod audio_peaks;
+mod capture;
 mod chat;
 mod commands;
 mod db;
@@ -7,6 +8,7 @@ mod error;
 mod import_transcript;
 mod llm;
 mod paths;
+mod recording;
 mod state;
 mod transcribe;
 
@@ -30,6 +32,7 @@ pub fn run() {
             let state = Arc::new(AppState {
                 db,
                 transcriber: std::sync::Mutex::new(None),
+                recording: crate::recording::RecordingRuntime::new(),
             });
             let _ = state.db.fail_interrupted_imports();
             app.manage(state);
@@ -74,6 +77,12 @@ pub fn run() {
             commands::get_chat_thread,
             commands::new_chat_thread,
             commands::ask_chat,
+            commands::start_recording,
+            commands::stop_recording,
+            commands::recording_status,
+            commands::recording_capabilities,
+            commands::get_rms,
+            commands::get_spectrum,
         ])
         .run(tauri::generate_context!())
         .expect("error while running BellaNote");

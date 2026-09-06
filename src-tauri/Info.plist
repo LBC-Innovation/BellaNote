@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>BellaNote uses the microphone for voice memos and to capture your side of a meeting along with system audio.</string>
+  <key>NSScreenCaptureUsageDescription</key>
+  <string>BellaNote needs Screen Recording permission to capture system audio (what you hear) during a meeting. It does not save video.</string>
+</dict>
+</plist>

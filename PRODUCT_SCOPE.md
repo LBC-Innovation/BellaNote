@@ -55,9 +55,10 @@ A user finishes a town hall, a 1:1, or a planning session, closes their laptop l
 
 ### What this repo has shipped (first Mac slice)
 
-The greenfield app is **Mac-only and files-only**. It does not yet include live capture, Windows, summaries, or tasks. It does prove the Duke walkthrough:
+The greenfield app is **Mac-first**. Live microphone recording (Mac and Windows) and macOS system + mic capture are in. Windows system-audio loopback, summaries, and tasks are not. It proves the Duke walkthrough:
 
 - Strict tree: **Organization → Topic category → Meeting group → Artifacts** (a refinement of §6.3’s optional-tag meeting model; unfiled org/topic remains the long-term product, not this slice)
+- **Record Meeting** from the microphone, or system audio + microphone on macOS, into the selected meeting group
 - Import audio (`wav` / `mp3` / `m4a` / `aac` / `ogg` / `flac`) → copy into Application Support → one-shot on-device `small.en`
 - Extra audio uploads wait as **Pending**; only the job that holds the whisper worker shows **Importing**
 - Import `.vtt` / `.srt` / `.txt` as ready transcripts (no audio required)
@@ -232,15 +233,15 @@ Origin: **Brief** = founder request. **POC** = already proven. **Granola** = cat
 
 | ID | Feature | What it does | Horizon | Priority | Origin | Notes |
 |---|---|---|---|---|---|---|
-| C1 | Microphone recording | Capture a voice memo / in-person conversation from the device mic | MVP | P0 | Brief, POC | Existing `voice` mode. |
-| C2 | System + microphone capture | Capture meeting playback *and* the user’s voice, no bot | MVP | P0 | Brief, POC, Granola | macOS: ScreenCaptureKit. Windows: WASAPI loopback + mic mix. Hardest Windows work. |
+| C1 | Microphone recording | Capture a voice memo / in-person conversation from the device mic | MVP | P0 | Brief, POC | **Shipped** (`voice` via `cpal` on Mac and Windows). |
+| C2 | System + microphone capture | Capture meeting playback *and* the user’s voice, no bot | MVP | P0 | Brief, POC, Granola | **Shipped on macOS** (ScreenCaptureKit audio + `cpal` mic, shared mixer). Windows: WASAPI loopback still to build. |
 | C3 | YouTube URL ingest | User pastes a YouTube link; app fetches audio and transcribes locally | MVP | P0 | Brief | Personal-use helper. Must show ToS/copyright notice. Fail gracefully on restricted videos. |
 | C4 | Local audio file ingest | User picks wav/mp3/m4a/ogg/etc.; transcribe locally | MVP | P0 | Brief, Market | **First slice:** one file per picker; `small.en` one-shot; extra files queue as Pending. Video rejected. |
 | C5 | Import third-party transcript | Ingest VTT/SRT/TXT/DOCX from Teams, Zoom, Otter, etc.; audio optional | MVP | P0 | Brief, POC | **First slice:** `.vtt` / `.srt` / `.txt` only (2 MB cap). No DOCX. |
 | C6 | Re-transcribe | Re-run local model on kept audio (better model, or after edit) | Near-term | P1 | POC | POC already has regenerate. Keep it. |
-| C7 | Live transcript (ignorable) | Segments appear while recording; user is not required to watch | MVP | P0 | POC, Otter | Calm, low-contrast during capture. |
-| C8 | Local audio retention + playback | Keep audio on disk; waveform; click transcript to seek | MVP | P0 | POC, Diff | **First slice:** static full-width tape, playhead, click-to-seek, Follow highlight. No archive yet. |
-| C9 | Transcript quality display | Show low-confidence segments; optional filter before LLM use | MVP | P0 | POC, Diff | **First slice:** Files table shows model / Imported / Importing / Pending / Failed — not per-segment confidence. |
+| C7 | Live transcript (ignorable) | Segments appear while recording; user is not required to watch | MVP | P0 | POC, Otter | **Shipped:** chunks update the artifact while capturing; Files shows Recording. |
+| C8 | Local audio retention + playback | Keep audio on disk; waveform; click transcript to seek | MVP | P0 | POC, Diff | **First slice:** static full-width tape, playhead, click-to-seek, Follow highlight. No archive yet. Recordings use the same `source.wav` path. |
+| C9 | Transcript quality display | Show low-confidence segments; optional filter before LLM use | MVP | P0 | POC, Diff | **First slice:** Files table shows model / Imported / Importing / Recording / Pending / Failed — not per-segment confidence. |
 | M1 | Meeting title | Editable name; default from time or first words | MVP | P0 | Brief, POC | **First slice:** meeting-group name + artifact title (inline rename). |
 | M2 | Attendees | Free-form people list; optional later contact pick | MVP | P0 | Brief | Not in POC. No directory required in MVP. |
 | M3 | Meeting purpose | Short “why we met” field | MVP | P0 | Brief | Manual; AI may suggest after transcript exists. |
@@ -261,7 +262,7 @@ Origin: **Brief** = founder request. **POC** = already proven. **Granola** = cat
 | A7 | Decision log | Extract “we decided X” as a first-class list | Near-term | P1 | Diff, Market | Complements tasks. Town halls and planning sessions especially. |
 | A8 | Custom / saved prompts (“Recipes”) | User-saved post-meeting actions (PRD, coaching note, standup recap) | Near-term | P1 | Granola, Tactiq | POC already has editable system prompts; productize as recipes. |
 | A9 | User-owned LLM | BYO key, provider + model picker, keychain storage | MVP | P0 | POC, Diff | **First slice:** OpenAI token in keychain, `gpt-4o` only. No Anthropic / model picker yet. |
-| A10 | Offline-safe core | Record and transcribe offline; AI disabled with a clear explanation | MVP | P0 | POC | **First slice:** transcribe works offline; chat needs the network and says so. No record path yet. |
+| A10 | Offline-safe core | Record and transcribe offline; AI disabled with a clear explanation | MVP | P0 | POC | **Shipped:** record and transcribe work offline; chat needs the network and says so. |
 | X1 | Copy / export transcript and notes | Markdown, plain text, VTT | MVP | P0 | POC, Market | POC exports timestamped text. Add markdown notes. |
 | X2 | Light / dark theme | Ship both; dark default | MVP | P0 | POC | **First slice:** dark charcoal / mint glass only. |
 | X3 | Recording consent reminder | Soft banner: you are capturing audio; know your jurisdiction | MVP | P0 | Jamie, Market | Trust. Not a legal product. |
@@ -311,7 +312,7 @@ This section is the contract for the first requirements and architecture pass.
 
 ### 6.2 Capture and ingest
 
-**First slice (shipped):** there is no “New meeting.” The user creates **Org → Topic → Meeting group**, then **Import Meeting** (audio file or transcript file) into that group. Multiple artifacts live in one group.
+**First slice (shipped):** the user creates **Org → Topic → Meeting group**, then **Import Meeting** (audio or transcript) or **Record Meeting** (microphone, or system + mic on macOS) into that group. Multiple artifacts live in one group. Windows microphone works; Windows system-audio loopback is still the remaining capture risk.
 
 **Target product:** every meeting is created the same way: **New meeting** (or “drop something on a meeting”). Then the user chooses an ingest path.
 

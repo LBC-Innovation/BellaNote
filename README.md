@@ -4,7 +4,7 @@
 
 A local-first Mac app for **beautiful meeting notes**. The promise is a record you can trust and actually want to reopen: organized files, an on-device transcript, playback when there is audio, and a scoped chat that answers from those notes — not from the internet at large.
 
-This repository is the greenfield product. The first slice is **macOS and files only**. Live microphone / system-audio capture, Windows, summaries, task extraction, and a sharing backend are planned later; they are not in this app yet.
+This repository is the greenfield product. The first Mac slice was files-only; this app now also records from the **microphone** (macOS and Windows) and **system audio + microphone** (macOS). Windows system-audio loopback, summaries, task extraction, and a sharing backend are still later.
 
 Long-term product definition: [`PRODUCT_SCOPE.md`](./PRODUCT_SCOPE.md)  
 What the current app does, story by story: [`USER_STORIES.md`](./USER_STORIES.md)  
@@ -16,9 +16,10 @@ First-slice technical contract: [`INITIAL_BUILD_NOTES.md`](./INITIAL_BUILD_NOTES
 
 Meetings still force a false choice: listen well, or write everything down. Most AI note tools solve the artifact problem (you get a transcript) by putting a bot in the call or sending audio to the cloud.
 
-BellaNote is a **companion you open after the meeting**, not a participant in it.
+BellaNote is a **companion you open for the meeting**, not a bot that joins the call.
 
 - You file audio and existing transcripts into a simple tree: **Organization → Topic → Meeting group → Files**.
+- You can **Record Meeting** from the microphone, or (on a Mac) mix **system audio + microphone** so the file has what you heard and what you said.
 - Audio is copied onto the machine and transcribed **on device** with Whisper (`small.en`). The original file in Downloads is never deleted.
 - Imported Zoom / Teams transcripts (`.vtt`, `.srt`, `.txt`) become readable notes immediately — no audio required.
 - You play audio against a static waveform, follow the matching transcript line, change speed, and search the text.
@@ -30,12 +31,14 @@ The Duke walkthrough is the north star for this slice: organize class material u
 
 | You can                                         | You cannot (yet)                      |
 | ----------------------------------------------- | ------------------------------------- |
-| Run a native Mac app with no account            | Use Windows                           |
-| Build the org / topic / group tree              | Record live mic or system audio       |
-| Import one or more audio files or transcripts   | Paste a YouTube URL                   |
-| Play audio, follow the transcript, search lines | Get auto summaries or extracted tasks |
-| Chat at org / topic / group / file scope        | Share a library with someone else     |
-| Keep the OpenAI token in the macOS keychain     | Move a file between meeting groups    |
+| Run a native Mac app with no account            | Capture system audio on Windows       |
+| Build the org / topic / group tree              | Paste a YouTube URL                   |
+| Record microphone (Mac and Windows)             | Get auto summaries or extracted tasks |
+| Record system + mic on macOS                    | Share a library with someone else     |
+| Import one or more audio files or transcripts   | Move a file between meeting groups    |
+| Play audio, follow the transcript, search lines |                                       |
+| Chat at org / topic / group / file scope        |                                       |
+| Keep the OpenAI token in the macOS keychain     |                                       |
 
 ---
 
@@ -51,7 +54,7 @@ BellaNote is a **Tauri 2** desktop app: a React frontend in a native window, wit
                            │ Tauri invoke / events
 ┌──────────────────────────▼──────────────────────────────────┐
 │  Rust host  (src-tauri/)                                    │
-│  SQLite · file copies · keychain · OpenAI · whisper worker  │
+│  SQLite · file copies · keychain · OpenAI · whisper worker · capture  │
 └──────────────────────────┬──────────────────────────────────┘
                            │ stdin / stdout JSON
 ┌──────────────────────────▼──────────────────────────────────┐
@@ -78,9 +81,10 @@ SQLite holds the tree, artifact metadata, and one chat thread per scope. File by
 ### Transcription
 
 1. **Import Meeting → Audio files** copies each file into `library/{id}/` and creates a row.
-2. The first job becomes **Importing** and runs `small.en` through a persistent Python worker. Extra files wait as **Pending**.
-3. On success the row is **Ready** (quality shows the Whisper model). On failure it is **Failed** and can be retried. A quit mid-import marks leftover **queued / transcribing** rows failed so they are not stuck forever.
-4. **Import Meeting → Transcript files** parses `.vtt` / `.srt` / `.txt` and marks the artifact Ready immediately (`Imported`).
+2. **Record Meeting → Microphone** (or **System audio** on a Mac) writes `source.wav` into the same layout and transcribes in chunks while you record.
+3. The first job becomes **Importing** (or **Recording**) and runs `small.en` through a persistent Python worker. Extra imported files wait as **Pending**.
+4. On success the row is **Ready** (quality shows the Whisper model). On failure it is **Failed** and can be retried. A quit mid-import or mid-record marks leftover in-flight rows failed so they are not stuck forever.
+5. **Import Meeting → Transcript files** parses `.vtt` / `.srt` / `.txt` and marks the artifact Ready immediately (`Imported`).
 
 Only one Whisper job holds the worker at a time. The UI does not stream partial text; you wait, then read the full transcript.
 
@@ -109,16 +113,20 @@ Three glass panes: **Library | Transcript | Chat**. Each can collapse to a label
 3. Inside it, create a **topic** (`Competitive Strategies`).
 4. Inside the topic, create a **meeting group** (`Lecture Class 1`).
 
-You cannot add files until that path exists. Rename and delete live on each row’s overflow menu. Delete always asks for confirmation. BellaNote never removes the original file on disk.
+You cannot add files until that path exists. Rename and delete live on each row’s overflow menu. Delete always asks for confirmation. A checkbox in that dialog can also delete the original audio file; leave it unchecked to keep the file on disk.
 
 **Collapse all** folds every org and topic in the library. Click a row (not the menu) to expand or collapse that branch.
 
 ### 2. Add files
 
-Select a meeting group, then **Import Meeting**:
+Select a meeting group, then **Import Meeting** or **Record Meeting**:
 
 - **Audio files** — `wav`, `mp3`, `m4a`, `aac`, `ogg`, `flac`. One or many. Status goes Pending → Importing → Ready (or Failed).
 - **Transcript files** — `.vtt`, `.srt`, `.txt`. Ready as soon as they parse.
+- **Microphone** — captures the default input. Works on Mac and Windows.
+- **System audio** — mixes what you hear with the microphone (macOS). Windows shows that this is not available yet.
+
+One recording at a time. Stop is instant; trailing transcript chunks may still arrive. A short consent line is visible while recording.
 
 Do not click an **Importing** row expecting the transcript; a toast asks you to wait. **Failed** rows have **Retry**.
 
@@ -267,7 +275,7 @@ UI kit is **shadcn + Tailwind 4 + Radix**. Keep new chrome in that system; do no
 ### Conventions
 
 - **Do not clone the BellaNote2 POC UI.** That repo informed capture and the whisper worker. This app has its own shell.
-- **Local files only** in this slice. Design artifacts so a future `voice` / `system` recording can land in the same meeting group, but do not add capture here.
+- **Recordings land in the same meeting group as imports** (`source_type` `voice` / `system`). Windows system audio is still a stub.
 - **Never delete the user’s original file.** Confirm every delete; remove only BellaNote’s copy.
 - Chat must send **transcript text**, never audio.
 - User stories in [`USER_STORIES.md`](./USER_STORIES.md) are rewritten to shipped behavior. If you change a user-facing flow, update that file in the same change.
