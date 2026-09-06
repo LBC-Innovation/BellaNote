@@ -213,7 +213,7 @@ Python and faster-whisper are frozen into the app. The person who installs the `
 The **Release** workflow (`.github/workflows/release.yml`) freezes the whisper worker, then builds Apple Silicon and Intel `.dmg` files and attaches them to a **draft** GitHub Release.
 
 1. Keep `version` in sync in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`.
-2. Either push a tag (`git tag v0.1.0 && git push origin v0.1.0`) or run **Actions → Release → Run workflow**.
+2. Either push a tag that matches `tauri.conf.json` (`git tag v0.1.0-beta.1 && git push origin v0.1.0-beta.1`) or run **Actions → Release → Run workflow**. The draft tag is always `v` plus the version in `tauri.conf.json` (`v__VERSION__`).
 3. When both macOS jobs finish, open the draft release, download the `.dmg` that matches the Mac, and publish the release when you are ready.
 
 The workflow signs and notarizes only if Apple certificate secrets are set (`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, and the Apple ID / team fields). Without them it still uploads unsigned installers.

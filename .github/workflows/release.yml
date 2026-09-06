@@ -72,5 +72,5 @@ jobs:
 
             Unsigned builds need a right-click → Open the first time. Python and faster-whisper are bundled. The first audio import downloads the Whisper model into Application Support.
           releaseDraft: true
-          prerelease: false
+          prerelease: true
           args: ${{ matrix.args }}
