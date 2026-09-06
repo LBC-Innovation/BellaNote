@@ -24,16 +24,16 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v6
         with:
-          node-version: lts/*
+          node-version: "24"
           cache: npm
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -102,7 +102,7 @@ jobs:
           releaseBody: |
             Download a `.dmg` for this Mac, open it, and drag BellaNote into Applications.
 
-            Unsigned builds need a right-click → Open the first time. Python and faster-whisper are bundled. The first audio import downloads the Whisper model into Application Support.
+            macOS may say the app is damaged. That is Gatekeeper on an unsigned download, not a broken installer. Do not move it to the Trash. Run `xattr -cr /Applications/BellaNote.app`, then open BellaNote. Python and faster-whisper are bundled. The first audio import downloads the Whisper model into Application Support.
           releaseDraft: true
           prerelease: true
           args: ${{ matrix.args }}
