@@ -102,7 +102,7 @@ jobs:
           releaseBody: |
             Download a `.dmg` for this Mac, open it, and drag BellaNote into Applications.
 
-            macOS may say the app is damaged. That is Gatekeeper on an unsigned download, not a broken installer. Do not move it to the Trash. Run `xattr -cr /Applications/BellaNote.app`, then open BellaNote. Python and faster-whisper are bundled. The first audio import downloads the Whisper model into Application Support.
+            Python and faster-whisper are bundled. The first audio import downloads the Whisper model into Application Support.
           releaseDraft: true
           prerelease: true
           args: ${{ matrix.args }}

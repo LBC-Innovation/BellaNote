@@ -444,7 +444,7 @@ Do **not** build live objection-coaching, talk-time scorecards, or “what to sa
 - **Efficiency:** One Rust host, small WebView UI, no second Electron-sized runtime if we can help it. Bundle size will be dominated by the Python/whisper payload — treat that as a known cost and keep it out of the hot UI path.
 - **Windows parity:** Feature-flag nothing in the UI. If system-audio capture slips, ship mic + file + import + YouTube on Windows rather than a “Mac only” badge on the main path — but **system+mic on Windows is still P0**, because that is the virtual-meeting story.
 - **Security:** LLM keys in OS keychain (already). No secrets in the repo. Path handling for import/export stays audited (see existing `SECURITY.md` concerns).
-- **Signing:** Plan for Apple notarization and Windows Authenticode before any external distribution. The POC already documents Gatekeeper “damaged app” failure mode.
+- **Signing:** GitHub `.dmg` releases are signed and notarized with Developer ID Application. Setup is in `documentation/APPLE_CODE_SIGNING.md`.
 
 ### 6.8 Nice-to-have backend (P2)
 
