@@ -1,6 +1,8 @@
+<!-- @format -->
+
 # BellaNote
 
-A local-first Mac app for **beautiful meeting notes**. *Bella* is both a daughter’s name and the Italian for *beautiful*. The promise is a record you can trust and actually want to reopen: organized files, an on-device transcript, playback when there is audio, and a scoped chat that answers from those notes — not from the internet at large.
+A local-first Mac app for **beautiful meeting notes**. The promise is a record you can trust and actually want to reopen: organized files, an on-device transcript, playback when there is audio, and a scoped chat that answers from those notes — not from the internet at large.
 
 This repository is the greenfield product. The first slice is **macOS and files only**. Live microphone / system-audio capture, Windows, summaries, task extraction, and a sharing backend are planned later; they are not in this app yet.
 
@@ -22,18 +24,18 @@ BellaNote is a **companion you open after the meeting**, not a participant in it
 - You play audio against a static waveform, follow the matching transcript line, change speed, and search the text.
 - You ask ChatGPT (`gpt-4o`) a question at a chosen **scope**: this file, this meeting group, this topic, or the whole organization. Only ready transcript text is sent. Audio bytes never leave the Mac.
 
-The Duke walkthrough is the north star for this slice: organize class material under **Duke → Competitive Strategies → Lecture Class 1**, drop in a posted lecture recording and a Zoom export, then ask *“What did we say about switching costs in September?”* at topic scope.
+The Duke walkthrough is the north star for this slice: organize class material under **Duke → Competitive Strategies → Lecture Class 1**, drop in a posted lecture recording and a Zoom export, then ask _“What did we say about switching costs in September?”_ at topic scope.
 
 ### In this slice
 
-| You can | You cannot (yet) |
-|---|---|
-| Run a native Mac app with no account | Use Windows |
-| Build the org / topic / group tree | Record live mic or system audio |
-| Import one or more audio files or transcripts | Paste a YouTube URL |
+| You can                                         | You cannot (yet)                      |
+| ----------------------------------------------- | ------------------------------------- |
+| Run a native Mac app with no account            | Use Windows                           |
+| Build the org / topic / group tree              | Record live mic or system audio       |
+| Import one or more audio files or transcripts   | Paste a YouTube URL                   |
 | Play audio, follow the transcript, search lines | Get auto summaries or extracted tasks |
-| Chat at org / topic / group / file scope | Share a library with someone else |
-| Keep the OpenAI token in the macOS keychain | Move a file between meeting groups |
+| Chat at org / topic / group / file scope        | Share a library with someone else     |
+| Keep the OpenAI token in the macOS keychain     | Move a file between meeting groups    |
 
 ---
 
@@ -183,12 +185,12 @@ That starts Vite at `http://localhost:1420` and opens the native Tauri window. U
 
 Useful scripts:
 
-| Command | What it does |
-|---|---|
-| `npm run tauri:dev` | Native app + Vite HMR |
-| `npm run dev` | Vite only (UI without Rust commands) |
-| `npm run build` | `tsc` + production frontend |
-| `npm run tauri` | Tauri CLI (`build`, etc.) |
+| Command             | What it does                         |
+| ------------------- | ------------------------------------ |
+| `npm run tauri:dev` | Native app + Vite HMR                |
+| `npm run dev`       | Vite only (UI without Rust commands) |
+| `npm run build`     | `tsc` + production frontend          |
+| `npm run tauri`     | Tauri CLI (`build`, etc.)            |
 
 ### Environment
 
@@ -200,11 +202,11 @@ The Rust host looks for a Python that can run the worker:
 
 Optional:
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `ECHO_PYTHON` | `.venv/bin/python3` | Interpreter for the whisper worker |
-| `ECHO_TRANSCRIBE_SCRIPT` | `scripts/transcribe_worker.py` | Override the worker script |
-| `WHISPER_MODEL` | `small.en` | Model name passed to faster-whisper |
+| Variable                 | Default                        | Purpose                             |
+| ------------------------ | ------------------------------ | ----------------------------------- |
+| `ECHO_PYTHON`            | `.venv/bin/python3`            | Interpreter for the whisper worker  |
+| `ECHO_TRANSCRIBE_SCRIPT` | `scripts/transcribe_worker.py` | Override the worker script          |
+| `WHISPER_MODEL`          | `small.en`                     | Model name passed to faster-whisper |
 
 ### Repository layout
 
@@ -237,8 +239,8 @@ UI kit is **shadcn + Tailwind 4 + Radix**. Keep new chrome in that system; do no
 
 ### Related documents
 
-| File | Use it for |
-|---|---|
-| [`PRODUCT_SCOPE.md`](./PRODUCT_SCOPE.md) | Vision, category bet, what comes after this slice |
-| [`USER_STORIES.md`](./USER_STORIES.md) | Shipped acceptance and leftover stories (US-205, US-303–305) |
-| [`INITIAL_BUILD_NOTES.md`](./INITIAL_BUILD_NOTES.md) | Interview-locked technical decisions for the first cut |
+| File                                                 | Use it for                                                   |
+| ---------------------------------------------------- | ------------------------------------------------------------ |
+| [`PRODUCT_SCOPE.md`](./PRODUCT_SCOPE.md)             | Vision, category bet, what comes after this slice            |
+| [`USER_STORIES.md`](./USER_STORIES.md)               | Shipped acceptance and leftover stories (US-205, US-303–305) |
+| [`INITIAL_BUILD_NOTES.md`](./INITIAL_BUILD_NOTES.md) | Interview-locked technical decisions for the first cut       |
