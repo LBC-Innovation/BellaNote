@@ -206,7 +206,7 @@ After the secrets are saved, delete `certificate-base64.txt` from Downloads. Kee
 No workflow or app code change is required once the secrets exist.
 
 1. Keep `version` in sync in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml` if you are cutting a new version.
-2. **Actions → Release → Run workflow**, or push a tag `v` + that version (example: `v0.1.0-beta.3`).
+2. **Actions → Release → Run workflow**, or push a tag `v` + that version (example: `v0.1.0-beta.1`).
 3. The macOS job is Apple Silicon only (`macos-latest` / `aarch64-apple-darwin`). Intel Macs are not supported.
 4. Open the **Export Apple signing secrets** step on the macOS job. You want that step **not** to log `No Apple Developer certificate`. If it does, the secrets did not load and the `.dmg` is unsigned — see [`RUNNING_UNSIGNED_VERSIONS.md`](./RUNNING_UNSIGNED_VERSIONS.md). When secrets load, Tauri imports the `.p12`, signs the `.app`, notarizes with Apple, and staples the ticket onto the `.dmg`.
 

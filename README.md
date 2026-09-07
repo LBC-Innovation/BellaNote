@@ -230,7 +230,7 @@ Python and faster-whisper are frozen into the app. The person who installs Bella
 The **Release** workflow (`.github/workflows/release.yml`) freezes the whisper worker, then builds an Apple Silicon `.dmg` plus a Windows NSIS installer and attaches them to a **draft** GitHub Release. Intel Macs are not supported.
 
 1. Keep `version` in sync in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`.
-2. Either push a tag that matches `tauri.conf.json` (`git tag v0.1.0-beta.3 && git push origin v0.1.0-beta.3`) or run **Actions → Release → Run workflow**. The draft tag is always `v` plus the version in `tauri.conf.json` (`v__VERSION__`).
+2. Either push a tag that matches `tauri.conf.json` (`git tag v0.1.0-beta.1 && git push origin v0.1.0-beta.1`) or run **Actions → Release → Run workflow**. The draft tag is always `v` plus the version in `tauri.conf.json` (`v__VERSION__`).
 3. When the macOS and Windows jobs finish, open the draft release (the **Releases** page, not “Create a new release”), download the installer that matches the machine, and publish when you are ready.
 
 If the job cannot create a release, set the repo **Actions** workflow permission to **Read and write**.
