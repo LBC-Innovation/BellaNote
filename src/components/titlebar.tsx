@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { FileText, MessageCircle, PanelLeft, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { isMac, isWindows } from "@/lib/platform";
+import { isMac } from "@/lib/platform";
 
 type Pane = "library" | "transcript" | "chat";
 
@@ -42,9 +42,7 @@ export function Titlebar({
   onOpenSettings: () => void;
 }) {
   return (
-    <header
-      className={cn("flex h-12 shrink-0 items-stretch", isWindows() && "pr-[140px]")}
-    >
+    <header className="flex h-12 shrink-0 items-stretch">
       {isMac() ? <div className="w-[72px] shrink-0" /> : <div className="w-3 shrink-0" />}
       <div className="flex min-w-0 flex-1 items-center" data-tauri-drag-region>
         <span className="pointer-events-none select-none text-sm font-semibold tracking-tight">

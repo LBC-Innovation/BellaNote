@@ -127,7 +127,7 @@ Epic 3  Scoped chat
 **Acceptance**
 
 - A standard Tauri app launches to a local three-pane workspace (Library, Transcript, Chat).  
-- The titlebar has layout buttons (Library only / Transcript only / Chat only) and Settings. The empty middle strip is the window drag region. On macOS, left inset clears the overlay traffic lights; on Windows, right inset clears the caption buttons.  
+- The titlebar has layout buttons (Library only / Transcript only / Chat only) and Settings. The empty middle strip is the window drag region. On macOS, a left inset clears the overlay traffic lights. Layout buttons sit on the right edge on Mac and Windows.  
 - No sign-in is required.  
 - First launch shows an empty library (“Start with an organization”) and a workspace prompt to create an organization.  
 - Closing and reopening restores organizations, topics, groups, and artifacts from local SQLite.  
