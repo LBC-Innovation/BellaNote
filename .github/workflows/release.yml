@@ -18,9 +18,9 @@ jobs:
           - runner: macos-latest
             rust-target: aarch64-apple-darwin
             args: "--target aarch64-apple-darwin --bundles dmg"
-          - runner: macos-13
-            rust-target: x86_64-apple-darwin
-            args: "--target x86_64-apple-darwin --bundles dmg"
+          - runner: windows-latest
+            rust-target: x86_64-pc-windows-msvc
+            args: "--target x86_64-pc-windows-msvc --bundles nsis"
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     steps:
@@ -51,6 +51,7 @@ jobs:
         run: npm ci
 
       - name: Bundle Python whisper worker
+        shell: bash
         run: bash scripts/build_whisper_sidecar.sh ${{ matrix.rust-target }}
 
       # Tauri treats a *present* APPLE_CERTIFICATE as “import this .p12”, even
@@ -58,6 +59,7 @@ jobs:
       # so exporting them unconditionally makes `security import` fail and no
       # .dmg is produced. Only write these into GITHUB_ENV when a real cert exists.
       - name: Export Apple signing secrets
+        if: startsWith(matrix.runner, 'macos')
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -100,9 +102,11 @@ jobs:
           tagName: v__VERSION__
           releaseName: "BellaNote v__VERSION__"
           releaseBody: |
-            Download a `.dmg` for this Mac, open it, and drag BellaNote into Applications.
+            macOS (Apple Silicon): download a `.dmg`, open it, and drag BellaNote into Applications.
 
-            Python and faster-whisper are bundled. The first audio import downloads the Whisper model into Application Support.
+            Windows: download the NSIS installer (`.exe`) and run it. WebView2 is installed if this PC does not already have it.
+
+            Python and faster-whisper are bundled. The first audio import downloads the Whisper model into Application Support (macOS) or AppData (Windows).
           releaseDraft: true
           prerelease: true
           args: ${{ matrix.args }}

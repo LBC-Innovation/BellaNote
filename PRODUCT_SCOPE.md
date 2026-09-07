@@ -1,9 +1,9 @@
 # BellaNote — Business Logic, Value Scope & Product Requirements
 
-**Document status:** Working draft for platform requirements — first Mac slice implemented  
+**Document status:** Working draft for platform requirements — Mac + Windows capture shipped  
 **Audience:** Founder, product, and engineering  
 **Date:** 5 September 2026  
-**Last implementation review:** 5 September 2026  
+**Last implementation review:** 6 September 2026  
 **Repo:** [LBC-Innovation/BellaNote](https://github.com/LBC-Innovation/BellaNote)  
 **Inputs:** Founder brief, existing BellaNote2 POC (`~/Documents/_DEV/_PERSONAL/BellaNote2`), [Granola](https://www.granola.ai/), and the 2026 AI meeting-notes category  
 **First-slice stories:** [`USER_STORIES.md`](./USER_STORIES.md)
@@ -55,16 +55,16 @@ A user finishes a town hall, a 1:1, or a planning session, closes their laptop l
 
 ### What this repo has shipped (first Mac slice)
 
-The greenfield app is **Mac-first**. Live microphone recording (Mac and Windows) and macOS system + mic capture are in. Windows system-audio loopback, summaries, and tasks are not. It proves the Duke walkthrough:
+The greenfield app is **Mac and Windows**. Live microphone recording and system + mic capture are in on both platforms (ScreenCaptureKit on macOS, WASAPI loopback on Windows). Summaries and tasks are not. It proves the Duke walkthrough:
 
 - Strict tree: **Organization → Topic category → Meeting group → Artifacts** (a refinement of §6.3’s optional-tag meeting model; unfiled org/topic remains the long-term product, not this slice)
-- **Record Meeting** from the microphone, or system audio + microphone on macOS, into the selected meeting group
+- **Record Meeting** from the microphone, or system audio + microphone, into the selected meeting group
 - Import audio (`wav` / `mp3` / `m4a` / `aac` / `ogg` / `flac`) → copy into Application Support → one-shot on-device `small.en`
 - Extra audio uploads wait as **Pending**; only the job that holds the whisper worker shows **Importing**
 - Import `.vtt` / `.srt` / `.txt` as ready transcripts (no audio required)
 - Static waveform, click-to-seek, and Follow-highlight on audio artifacts
 - Scoped `gpt-4o` chat at org / topic / meeting group / this file, with a ready-count preview and a ~110k character budget
-- OpenAI token in the macOS keychain
+- OpenAI token in the OS credential store (macOS Keychain / Windows Credential Manager)
 - Three-pane charcoal / mint glass shell (Library | Transcript | Chat), with collapsible rails
 
 Story-level status lives in [`USER_STORIES.md`](./USER_STORIES.md).
@@ -112,7 +112,7 @@ Treat the following as **inherited product truth**, not a rewrite.
 
 | Area | POC capability | Implication for the new app |
 |---|---|---|
-| Capture | `voice` (mic via cpal) and `system` (ScreenCaptureKit mix of display audio + mic) | Keep both modes. Add a Windows WASAPI / loopback equivalent for `system`. |
+| Capture | `voice` (mic via cpal) and `system` (ScreenCaptureKit mix of display audio + mic on macOS; WASAPI loopback + mic on Windows) | Keep both modes. Native backends; shared mixer. |
 | Transcription | Persistent Python faster-whisper worker; model loads once per session; bundled runtime for release | Keep on-device transcription. Do not move this to a server for MVP. |
 | Storage | Local SQLite meetings; audio on disk; archive drops audio and keeps text | Continue local-first. Design schema now for org, topic, attendees, purpose, meeting type. |
 | Library | Grouped by today / yesterday / older days | Date grouping stays. Add optional filters for org and topic. |
@@ -127,7 +127,7 @@ Treat the following as **inherited product truth**, not a rewrite.
 
 The greenfield first slice closed the starred items for Mac files. The rest remain.
 
-- macOS only (no Windows capture path)
+- ★ Windows capture path (mic + WASAPI system audio, shipped)
 - No YouTube ingest
 - ★ Local audio-file ingest (shipped)
 - ★ Organization, topic category, and meeting group (shipped as a required tree, not optional tags)
@@ -234,7 +234,7 @@ Origin: **Brief** = founder request. **POC** = already proven. **Granola** = cat
 | ID | Feature | What it does | Horizon | Priority | Origin | Notes |
 |---|---|---|---|---|---|---|
 | C1 | Microphone recording | Capture a voice memo / in-person conversation from the device mic | MVP | P0 | Brief, POC | **Shipped** (`voice` via `cpal` on Mac and Windows). |
-| C2 | System + microphone capture | Capture meeting playback *and* the user’s voice, no bot | MVP | P0 | Brief, POC, Granola | **Shipped on macOS** (ScreenCaptureKit audio + `cpal` mic, shared mixer). Windows: WASAPI loopback still to build. |
+| C2 | System + microphone capture | Capture meeting playback *and* the user’s voice, no bot | MVP | P0 | Brief, POC, Granola | **Shipped** on macOS (ScreenCaptureKit audio + `cpal` mic) and Windows (WASAPI loopback of the default playback device + `cpal` mic), shared mixer. |
 | C3 | YouTube URL ingest | User pastes a YouTube link; app fetches audio and transcribes locally | MVP | P0 | Brief | Personal-use helper. Must show ToS/copyright notice. Fail gracefully on restricted videos. |
 | C4 | Local audio file ingest | User picks wav/mp3/m4a/ogg/etc.; transcribe locally | MVP | P0 | Brief, Market | **First slice:** one file per picker; `small.en` one-shot; extra files queue as Pending. Video rejected. |
 | C5 | Import third-party transcript | Ingest VTT/SRT/TXT/DOCX from Teams, Zoom, Otter, etc.; audio optional | MVP | P0 | Brief, POC | **First slice:** `.vtt` / `.srt` / `.txt` only (2 MB cap). No DOCX. |
@@ -304,7 +304,7 @@ This section is the contract for the first requirements and architecture pass.
 
 ### 6.1 Product shape
 
-- **Form factor:** Native desktop app for **macOS 13+** and **Windows 11**. **First slice ships Mac only.**
+- **Form factor:** Native desktop app for **macOS 13+ (Apple Silicon)** and **Windows 10+** (WebView2). Intel Macs are not supported.
 - **Stack direction (recommended):** Continue **Tauri 2 + Rust + React + TypeScript**. The first slice and BellaNote2 already paid the tax on Whisper, keychain, and a dense desktop UI. Electron would fight the “efficient on both platforms” goal.
 - **Local data:** SQLite + files under Application Support (`com.bellanote.app`). A user-chosen recordings directory is later.
 - **AI:** Optional, user-configured. No AI vendor account required to record or transcribe.
@@ -312,7 +312,7 @@ This section is the contract for the first requirements and architecture pass.
 
 ### 6.2 Capture and ingest
 
-**First slice (shipped):** the user creates **Org → Topic → Meeting group**, then **Import Meeting** (audio or transcript) or **Record Meeting** (microphone, or system + mic on macOS) into that group. Multiple artifacts live in one group. Windows microphone works; Windows system-audio loopback is still the remaining capture risk.
+**First slice (shipped):** the user creates **Org → Topic → Meeting group**, then **Import Meeting** (audio or transcript) or **Record Meeting** (microphone, or system + mic) into that group. Multiple artifacts live in one group. Windows uses WASAPI loopback for system audio.
 
 **Target product:** every meeting is created the same way: **New meeting** (or “drop something on a meeting”). Then the user chooses an ingest path.
 
@@ -443,9 +443,9 @@ Do **not** build live objection-coaching, talk-time scorecards, or “what to sa
 
 - **Performance:** Whisper stays in a long-lived worker. UI must stay responsive while transcribing. Library virtualizes long lists.
 - **Efficiency:** One Rust host, small WebView UI, no second Electron-sized runtime if we can help it. Bundle size will be dominated by the Python/whisper payload — treat that as a known cost and keep it out of the hot UI path.
-- **Windows parity:** Feature-flag nothing in the UI. If system-audio capture slips, ship mic + file + import + YouTube on Windows rather than a “Mac only” badge on the main path — but **system+mic on Windows is still P0**, because that is the virtual-meeting story.
+- **Windows parity:** Same product on Mac and Windows. System + mic uses ScreenCaptureKit on macOS and WASAPI loopback on Windows; the UI is not feature-flagged.
 - **Security:** LLM keys in OS keychain (already). No secrets in the repo. Path handling for import/export stays audited (see existing `SECURITY.md` concerns).
-- **Signing:** GitHub `.dmg` releases are signed and notarized with Developer ID Application. Setup is in `documentation/APPLE_CODE_SIGNING.md`.
+- **Signing:** GitHub `.dmg` releases are signed and notarized with Developer ID Application. Setup is in `documentation/APPLE_CODE_SIGNING.md`. Windows NSIS installers ship from the same Release workflow.
 
 ### 6.8 Nice-to-have backend (P2)
 
@@ -499,11 +499,11 @@ Requirements work for P3 should not distort MVP schema beyond: **a meeting can h
 
 - Product scope (this document) agreed
 - **Done in the first slice:** app shell, design tokens, local schema for org / topic / meeting group / artifact, Mac file ingest, scoped chat
-- Shared capture interface with macOS and Windows backends — **not started**
+- Shared capture interface with macOS (ScreenCaptureKit) and Windows (WASAPI) backends — **shipped**
 
 ### Phase 1 — MVP desktop
 
-- Remaining P0 rows in the feature table (live capture, Windows, summaries, tasks, attendees, export, consent)
+- Remaining P0 rows in the feature table (summaries, tasks, attendees, export, consent)
 - A person can go from zero to “I understand yesterday’s planning session” on both platforms without an account
 
 ### Phase 2 — Memory
@@ -524,7 +524,7 @@ Requirements work for P3 should not distort MVP schema beyond: **a meeting can h
 
 | Risk / question | Why it matters | Lean |
 |---|---|---|
-| Windows system-audio capture is the schedule risk | This is the virtual-meeting story | Spike WASAPI loopback in Phase 0; do not discover it after UI is done |
+| Windows system-audio capture | Virtual-meeting story on Windows | **Shipped:** WASAPI loopback of the default render device, mixed with cpal mic |
 | YouTube ToS / copyright | Ingest can look like a downloader | Ship as “import audio from a URL you are allowed to use,” block non-audio abuse, keep logs out of our servers |
 | Whisper quality vs. cloud STT | Local models lag diarized cloud APIs | Keep audio so we can re-transcribe; quality tiers set expectations |
 | BYO LLM keys vs. BellaNote-hosted AI | Keys are private but a setup step | MVP: BYO. Later: optional BellaNote-hosted for less technical users |
@@ -550,11 +550,10 @@ Qualitative first. We will not have SaaS dashboards on day one.
 
 ## 10. How to use this document next
 
-The first Mac files slice is in the repo. Story-level leftovers are listed at the bottom of [`USER_STORIES.md`](./USER_STORIES.md).
+The first Mac + Windows files-and-capture slice is in the repo. Story-level leftovers are listed at the bottom of [`USER_STORIES.md`](./USER_STORIES.md).
 
-1. Treat remaining Section 5 P0 rows (capture, Windows, summaries, tasks, attendees, export, consent) as the next requirements backlog.
-2. Keep the first-slice schema (meeting group + artifacts) when live capture lands — a recording is another artifact in a group.
-3. Spike **Windows system audio** before investing in net-new UI.
-4. Port remaining BellaNote2 modules only where this slice did not already replace them: capture, enhance-notes, quality filter, archive.
+1. Treat remaining Section 5 P0 rows (summaries, tasks, attendees, export, consent) as the next requirements backlog.
+2. Keep the first-slice schema (meeting group + artifacts) — a recording is another artifact in a group.
+3. Port remaining BellaNote2 modules only where this slice did not already replace them: enhance-notes, quality filter, archive.
 
 BellaNote succeeds if the note is beautiful *and* the person who made it was actually in the meeting.

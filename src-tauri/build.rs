@@ -1,15 +1,24 @@
 fn ensure_sidecar_placeholders() {
-    let triples = ["aarch64-apple-darwin", "x86_64-apple-darwin"];
+    let triples = [
+        ("aarch64-apple-darwin", false),
+        ("x86_64-pc-windows-msvc", true),
+        ("aarch64-pc-windows-msvc", true),
+    ];
     let dir = std::path::Path::new("binaries");
     let _ = std::fs::create_dir_all(dir);
-    for triple in triples {
-        let path = dir.join(format!("transcribe-worker-{triple}"));
+    for (triple, windows) in triples {
+        let name = if windows {
+            format!("transcribe-worker-{triple}.exe")
+        } else {
+            format!("transcribe-worker-{triple}")
+        };
+        let path = dir.join(name);
         if path.exists() {
             continue;
         }
         let _ = std::fs::write(&path, b"#!/bin/sh\necho placeholder-sidecar\n");
         #[cfg(unix)]
-        {
+        if !windows {
             use std::os::unix::fs::PermissionsExt;
             if let Ok(meta) = std::fs::metadata(&path) {
                 let mut perms = meta.permissions();

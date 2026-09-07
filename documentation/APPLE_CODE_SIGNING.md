@@ -207,16 +207,10 @@ No workflow or app code change is required once the secrets exist.
 
 1. Keep `version` in sync in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml` if you are cutting a new version.
 2. **Actions → Release → Run workflow**, or push a tag `v` + that version (example: `v0.1.0-beta.3`).
-3. Two jobs run in parallel — that is intentional:
+3. The macOS job is Apple Silicon only (`macos-latest` / `aarch64-apple-darwin`). Intel Macs are not supported.
+4. Open the **Export Apple signing secrets** step on the macOS job. You want that step **not** to log `No Apple Developer certificate`. If it does, the secrets did not load and the `.dmg` is unsigned — see [`RUNNING_UNSIGNED_VERSIONS.md`](./RUNNING_UNSIGNED_VERSIONS.md). When secrets load, Tauri imports the `.p12`, signs the `.app`, notarizes with Apple, and staples the ticket onto the `.dmg`.
 
-   | Job | `.dmg` for |
-   | --- | ---------- |
-   | `macos-latest` / `aarch64-apple-darwin` | Apple Silicon |
-   | `macos-13` / `x86_64-apple-darwin` | Intel |
-
-4. Open the **Export Apple signing secrets** step on each job. You want that step **not** to log `No Apple Developer certificate`. If it does, the secrets did not load and the `.dmg` is unsigned — see [`RUNNING_UNSIGNED_VERSIONS.md`](./RUNNING_UNSIGNED_VERSIONS.md). When secrets load, Tauri imports the `.p12`, signs the `.app`, notarizes with Apple, and staples the ticket onto the `.dmg`.
-
-5. Wait until **both** jobs succeed. Open the **draft** on the repo **Releases** page (not “Create a new release”), download the `.dmg` that matches the Mac, smoke-test it, then publish.
+5. Wait until the macOS job succeeds. Open the **draft** on the repo **Releases** page (not “Create a new release”), download the Apple Silicon `.dmg`, smoke-test it, then publish.
 
 ## Local signed builds (optional)
 

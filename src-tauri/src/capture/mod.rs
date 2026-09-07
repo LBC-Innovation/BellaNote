@@ -5,13 +5,8 @@ pub mod wav;
 
 #[cfg(target_os = "macos")]
 pub mod system_macos;
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
 pub mod system_windows;
-
-#[cfg(target_os = "macos")]
-pub use system_macos::SystemAudioSession;
-#[cfg(not(target_os = "macos"))]
-pub use system_windows::SystemAudioSession;
 
 use crate::capture::mic::{MicCaptureSession, SampleSink};
 use crate::capture::mixer::SystemMicMixer;
@@ -20,6 +15,33 @@ use anyhow::Result;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
+
+#[cfg(target_os = "macos")]
+pub use system_macos::SystemAudioSession;
+#[cfg(target_os = "windows")]
+pub use system_windows::SystemAudioSession;
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+pub struct SystemAudioSession;
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+impl SystemAudioSession {
+    pub async fn new(_mixer: std::sync::Arc<SystemMicMixer>) -> Result<Self> {
+        Err(anyhow::anyhow!(
+            "System audio capture is not available on this platform."
+        ))
+    }
+
+    pub fn start(&self) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "System audio capture is not available on this platform."
+        ))
+    }
+
+    pub fn stop(&self) -> Result<()> {
+        Ok(())
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CaptureMode {
@@ -48,18 +70,19 @@ impl AnyCaptureSession {
     }
 
     pub async fn start_system(output: MixOutput) -> Result<Self> {
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = output;
             return Err(anyhow::anyhow!(
-                "System audio capture is not available on Windows yet."
+                "System audio capture is not available on this platform."
             ));
         }
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
             let mixer = SystemMicMixer::new(output);
             let mixer_running = Arc::new(AtomicBool::new(true));
-            let mixer_join = SystemMicMixer::spawn_mixer_thread(mixer.clone(), mixer_running.clone());
+            let mixer_join =
+                SystemMicMixer::spawn_mixer_thread(mixer.clone(), mixer_running.clone());
             let mixer_for_mic = mixer.clone();
             let mic_sink: SampleSink =
                 Arc::new(move |samples: &[f32]| mixer_for_mic.push_microphone(samples));

@@ -2,9 +2,9 @@
 
 # BellaNote
 
-A local-first Mac app for **beautiful meeting notes**. The promise is a record you can trust and actually want to reopen: organized files, an on-device transcript, playback when there is audio, and a scoped chat that answers from those notes — not from the internet at large.
+A local-first Mac and Windows app for **beautiful meeting notes**. The promise is a record you can trust and actually want to reopen: organized files, an on-device transcript, playback when there is audio, and a scoped chat that answers from those notes — not from the internet at large.
 
-This repository is the greenfield product. The first Mac slice was files-only; this app now also records from the **microphone** (macOS and Windows) and **system audio + microphone** (macOS). Windows system-audio loopback, summaries, task extraction, and a sharing backend are still later.
+This repository is the greenfield product. The first Mac slice was files-only; this app now records from the **microphone** and **system audio + microphone** on both macOS (ScreenCaptureKit) and Windows (WASAPI loopback). Summaries, task extraction, and a sharing backend are still later.
 
 Long-term product definition: [`PRODUCT_SCOPE.md`](./PRODUCT_SCOPE.md)  
 What the current app does, story by story: [`USER_STORIES.md`](./USER_STORIES.md)  
@@ -19,11 +19,11 @@ Meetings still force a false choice: listen well, or write everything down. Most
 BellaNote is a **companion you open for the meeting**, not a bot that joins the call.
 
 - You file audio and existing transcripts into a simple tree: **Organization → Topic → Meeting group → Files**.
-- You can **Record Meeting** from the microphone, or (on a Mac) mix **system audio + microphone** so the file has what you heard and what you said.
+- You can **Record Meeting** from the microphone, or mix **system audio + microphone** so the file has what you heard and what you said.
 - Audio is copied onto the machine and transcribed **on device** with Whisper (`small.en`). The original file in Downloads is never deleted.
 - Imported Zoom / Teams transcripts (`.vtt`, `.srt`, `.txt`) become readable notes immediately — no audio required.
 - You play audio against a static waveform, follow the matching transcript line, change speed, and search the text.
-- You ask ChatGPT (`gpt-4o`) a question at a chosen **scope**: this file, this meeting group, this topic, or the whole organization. Only ready transcript text is sent. Audio bytes never leave the Mac.
+- You ask ChatGPT (`gpt-4o`) a question at a chosen **scope**: this file, this meeting group, this topic, or the whole organization. Only ready transcript text is sent. Audio bytes never leave the machine.
 
 The Duke walkthrough is the north star for this slice: organize class material under **Duke → Competitive Strategies → Lecture Class 1**, drop in a posted lecture recording and a Zoom export, then ask _“What did we say about switching costs in September?”_ at topic scope.
 
@@ -31,14 +31,14 @@ The Duke walkthrough is the north star for this slice: organize class material u
 
 | You can                                         | You cannot (yet)                      |
 | ----------------------------------------------- | ------------------------------------- |
-| Run a native Mac app with no account            | Capture system audio on Windows       |
-| Build the org / topic / group tree              | Paste a YouTube URL                   |
-| Record microphone (Mac and Windows)             | Get auto summaries or extracted tasks |
-| Record system + mic on macOS                    | Share a library with someone else     |
-| Import one or more audio files or transcripts   | Move a file between meeting groups    |
+| Run a native Mac or Windows app with no account | Paste a YouTube URL                 |
+| Build the org / topic / group tree              | Get auto summaries or extracted tasks |
+| Record microphone (Mac and Windows)             | Share a library with someone else     |
+| Record system + mic on macOS and Windows        | Move a file between meeting groups    |
+| Import one or more audio files or transcripts   |                                       |
 | Play audio, follow the transcript, search lines |                                       |
 | Chat at org / topic / group / file scope        |                                       |
-| Keep the OpenAI token in the macOS keychain     |                                       |
+| Keep the OpenAI token in the OS credential store |                                       |
 
 ---
 
@@ -124,7 +124,7 @@ Select a meeting group, then **Import Meeting** or **Record Meeting**:
 - **Audio files** — `wav`, `mp3`, `m4a`, `aac`, `ogg`, `flac`. One or many. Status goes Pending → Importing → Ready (or Failed).
 - **Transcript files** — `.vtt`, `.srt`, `.txt`. Ready as soon as they parse.
 - **Microphone** — captures the default input. Works on Mac and Windows.
-- **System audio** — mixes what you hear with the microphone (macOS). Windows shows that this is not available yet.
+- **System audio** — mixes what you hear with the microphone. macOS uses ScreenCaptureKit; Windows uses WASAPI loopback of the default playback device. Headphones avoid speaker echo into the mic.
 
 One recording at a time. Stop is instant; trailing transcript chunks may still arrive. A short consent line is visible while recording.
 
@@ -151,7 +151,7 @@ The **Search transcript** field sits under the lines. Typing filters immediately
 
 ### 5. Ask a question
 
-1. Open **Settings** (titlebar) and paste an OpenAI API token. It is stored in the macOS keychain (`com.bellanote.app` / `openai_api_key`), never in the repo.
+1. Open **Settings** (titlebar) and paste an OpenAI API token. It is stored in the OS credential store (`com.bellanote.app` / `openai_api_key`), never in the repo.
 2. Set scope to Org, Topic, Group, or This file.
 3. Ask in plain language. Answers render as markdown with citations.
 
@@ -167,21 +167,23 @@ Use the titlebar layout buttons to show only Library, only Transcript, or only C
 
 ### Prerequisites
 
-- macOS with **Xcode Command Line Tools**
+- **macOS 13+ on Apple Silicon**, with Xcode Command Line Tools, or **Windows 10+** with [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) (the installer can download it) and the MSVC build tools for local Rust builds
 - **Node 22+** (Release CI uses Node 24)
 - **Rust** via [rustup](https://rustup.rs/)
-- **Python 3** for `npm run tauri:dev` only (Homebrew’s interpreter is “externally managed” — use a venv). Installers bundle their own worker.
+- **Python 3** for `npm run tauri:dev` only. Installers bundle their own worker.
+
+On macOS, Homebrew’s interpreter is “externally managed” — use a venv.
 
 ### First-time setup
 
 ```bash
 npm install
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 python3 -m pip install -r requirements.txt
 ```
 
-`requirements.txt` installs **faster-whisper** for local `tauri:dev`. Packaged builds freeze that worker with `npm run sidecar:whisper` (also run automatically before the `.dmg` is assembled). The first audio import downloads the `small.en` model into Application Support; that can take a minute.
+`requirements.txt` installs **faster-whisper** for local `tauri:dev`. Packaged builds freeze that worker with `npm run sidecar:whisper` (also run automatically before the installer is assembled). The first audio import downloads the `small.en` model into Application Support (macOS) or AppData (Windows); that can take a minute.
 
 ### Run the desktop app
 
@@ -189,14 +191,15 @@ python3 -m pip install -r requirements.txt
 npm run tauri:dev
 ```
 
-That starts Vite at `http://localhost:1420` and opens the native Tauri window. Use the **window**, not the browser tab: file dialogs, keychain, SQLite, and the whisper worker only exist in Tauri.
+That starts Vite at `http://localhost:1420` and opens the native Tauri window. Use the **window**, not the browser tab: file dialogs, the OS credential store, SQLite, and the whisper worker only exist in Tauri.
 
 Useful scripts:
 
 | Command             | What it does                         |
 | ------------------- | ------------------------------------ |
 | `npm run tauri:dev`      | Native app + Vite HMR                         |
-| `npm run tauri:build`    | Production `.app` + `.dmg` (builds the worker) |
+| `npm run tauri:build`    | Production `.app` + `.dmg` on macOS (builds the worker) |
+| `npm run tauri:build:windows` | Production NSIS installer on Windows |
 | `npm run sidecar:whisper` | Freeze Python + faster-whisper into a sidecar |
 | `npm run dev`            | Vite only (UI without Rust commands)          |
 | `npm run build`          | `tsc` + production frontend                   |
@@ -204,7 +207,7 @@ Useful scripts:
 
 ### Install a local build
 
-On this Mac (after first-time setup):
+**macOS** (after first-time setup):
 
 ```bash
 npm run tauri:build
@@ -212,15 +215,23 @@ npm run tauri:build
 
 The installer lands at `src-tauri/target/release/bundle/dmg/`. Open the `.dmg`, drag **BellaNote** into Applications, then launch it from there.
 
-Python and faster-whisper are frozen into the app. The person who installs the `.dmg` does not install those dependencies. The first audio import downloads the `small.en` model into Application Support; after that, transcription stays on device.
+**Windows:**
+
+```bash
+npm run tauri:build:windows
+```
+
+The NSIS installer lands under `src-tauri/target/release/bundle/nsis/`. Run it; WebView2 is downloaded if this PC does not already have it.
+
+Python and faster-whisper are frozen into the app. The person who installs BellaNote does not install those dependencies. The first audio import downloads the `small.en` model into Application Support (macOS) or AppData (Windows); after that, transcription stays on device.
 
 ### GitHub Releases
 
-The **Release** workflow (`.github/workflows/release.yml`) freezes the whisper worker, then builds Apple Silicon and Intel `.dmg` files and attaches them to a **draft** GitHub Release.
+The **Release** workflow (`.github/workflows/release.yml`) freezes the whisper worker, then builds an Apple Silicon `.dmg` plus a Windows NSIS installer and attaches them to a **draft** GitHub Release. Intel Macs are not supported.
 
 1. Keep `version` in sync in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`.
 2. Either push a tag that matches `tauri.conf.json` (`git tag v0.1.0-beta.3 && git push origin v0.1.0-beta.3`) or run **Actions → Release → Run workflow**. The draft tag is always `v` plus the version in `tauri.conf.json` (`v__VERSION__`).
-3. When both macOS jobs finish, open the draft release (the **Releases** page, not “Create a new release”), download the `.dmg` that matches the Mac, and publish when you are ready.
+3. When the macOS and Windows jobs finish, open the draft release (the **Releases** page, not “Create a new release”), download the installer that matches the machine, and publish when you are ready.
 
 If the job cannot create a release, set the repo **Actions** workflow permission to **Read and write**.
 
@@ -239,15 +250,15 @@ Official reference: [Tauri macOS code signing](https://v2.tauri.app/distribute/s
 Packaged builds spawn the bundled `transcribe-worker` sidecar. `tauri:dev` uses the repo Python worker:
 
 1. `ECHO_TRANSCRIBE_SIDECAR` if set
-2. else the sidecar next to the app binary, or `src-tauri/binaries/transcribe-worker-<triple>`
-3. else (debug only) `ECHO_PYTHON` / `.venv/bin/python3` / `python3` plus `scripts/transcribe_worker.py`
+2. else the sidecar next to the app binary, or `src-tauri/binaries/transcribe-worker-<triple>` (`.exe` on Windows)
+3. else (debug only) `ECHO_PYTHON` / `.venv/bin/python3` / `.venv/Scripts/python.exe` / `python3` / `python` plus `scripts/transcribe_worker.py`
 
 Optional:
 
 | Variable                   | Default                        | Purpose                                      |
 | -------------------------- | ------------------------------ | -------------------------------------------- |
 | `ECHO_TRANSCRIBE_SIDECAR`  | bundled `transcribe-worker`    | Override the frozen worker binary            |
-| `ECHO_PYTHON`              | `.venv/bin/python3`            | Interpreter for `tauri:dev`                  |
+| `ECHO_PYTHON`              | `.venv/bin/python3` (Windows: `.venv/Scripts/python.exe`) | Interpreter for `tauri:dev` |
 | `ECHO_TRANSCRIBE_SCRIPT`   | `scripts/transcribe_worker.py` | Override the worker script in `tauri:dev`    |
 | `WHISPER_MODEL`            | `small.en`                     | Model name passed to faster-whisper          |
 
@@ -275,7 +286,7 @@ UI kit is **shadcn + Tailwind 4 + Radix**. Keep new chrome in that system; do no
 ### Conventions
 
 - **Do not clone the BellaNote2 POC UI.** That repo informed capture and the whisper worker. This app has its own shell.
-- **Recordings land in the same meeting group as imports** (`source_type` `voice` / `system`). Windows system audio is still a stub.
+- **Recordings land in the same meeting group as imports** (`source_type` `voice` / `system`). System + mic uses ScreenCaptureKit on macOS and WASAPI loopback on Windows.
 - **Never delete the user’s original file.** Confirm every delete; remove only BellaNote’s copy.
 - Chat must send **transcript text**, never audio.
 - User stories in [`USER_STORIES.md`](./USER_STORIES.md) are rewritten to shipped behavior. If you change a user-facing flow, update that file in the same change.
