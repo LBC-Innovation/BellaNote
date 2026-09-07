@@ -117,7 +117,7 @@ function PaneShell({
 
   return (
     <div
-      className="flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden"
+      className="flex min-h-0 min-w-0 shrink-0 flex-col"
       style={{
         width,
         minWidth: RAIL,
@@ -175,37 +175,56 @@ export default function App() {
   }, [load]);
 
   return (
-    <div className="flex h-full flex-col text-foreground">
-      <Titlebar
-        layoutFocus={layoutFocus}
-        onShowOnly={showOnly}
-        onOpenSettings={() => setSettingsOpen(true)}
-      />
+    <div className="relative flex h-full flex-col text-foreground">
+      <div id="ambient" aria-hidden="true">
+        <span className="origin o1">
+          <i />
+          <i />
+          <i />
+        </span>
+        <span className="origin o2">
+          <i />
+          <i />
+          <i />
+        </span>
+        <span className="origin o3">
+          <i />
+          <i />
+          <i />
+        </span>
+      </div>
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <Titlebar
+          layoutFocus={layoutFocus}
+          onShowOnly={showOnly}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
 
-      {error ? <p className="px-6 pb-2 text-sm text-destructive">{error}</p> : null}
+        {error ? <p className="px-6 pb-2 text-sm text-destructive">{error}</p> : null}
 
-      <main ref={mainRef} className="flex min-h-0 flex-1 gap-3 px-3 pb-3">
-        <PaneShell collapsed={libraryCollapsed} width={libraryWidth} animate={animatePanes}>
-          {(collapsed) => (
-            <LibraryPanel collapsed={collapsed} onCollapsedChange={setLibraryCollapsed} />
-          )}
-        </PaneShell>
-        <PaneShell collapsed={transcriptCollapsed} width={transcriptWidth} animate={animatePanes}>
-          {(collapsed) => (
-            <WorkspacePanel collapsed={collapsed} onCollapsedChange={setTranscriptCollapsed} />
-          )}
-        </PaneShell>
-        <PaneShell collapsed={chatCollapsed} width={chatWidth} animate={animatePanes}>
-          {(collapsed) => (
-            <ChatPanel
-              collapsed={collapsed}
-              onCollapsedChange={setChatCollapsed}
-              keyConfigured={keyConfigured}
-              onNeedKey={() => setSettingsOpen(true)}
-            />
-          )}
-        </PaneShell>
-      </main>
+        <main ref={mainRef} className="flex min-h-0 flex-1 gap-3 px-3 pb-3">
+          <PaneShell collapsed={libraryCollapsed} width={libraryWidth} animate={animatePanes}>
+            {(collapsed) => (
+              <LibraryPanel collapsed={collapsed} onCollapsedChange={setLibraryCollapsed} />
+            )}
+          </PaneShell>
+          <PaneShell collapsed={transcriptCollapsed} width={transcriptWidth} animate={animatePanes}>
+            {(collapsed) => (
+              <WorkspacePanel collapsed={collapsed} onCollapsedChange={setTranscriptCollapsed} />
+            )}
+          </PaneShell>
+          <PaneShell collapsed={chatCollapsed} width={chatWidth} animate={animatePanes}>
+            {(collapsed) => (
+              <ChatPanel
+                collapsed={collapsed}
+                onCollapsedChange={setChatCollapsed}
+                keyConfigured={keyConfigured}
+                onNeedKey={() => setSettingsOpen(true)}
+              />
+            )}
+          </PaneShell>
+        </main>
+      </div>
 
       <SettingsDialog
         open={settingsOpen}

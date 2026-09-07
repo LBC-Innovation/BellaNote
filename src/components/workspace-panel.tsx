@@ -59,22 +59,21 @@ export function WorkspacePanel({
                 <Sparkles className="size-5" />
               </div>
               <h1 className="max-w-md text-2xl font-semibold tracking-tight">
-                Stay in the meeting. BellaNote writes the beautiful note.
+                Stay present, let Bella capture the context.
               </h1>
               <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted-foreground">
-                Create an organization to begin the Duke-style tree: organization, topic, then a
-                meeting group for files.
+                Create an organization, add a topic, then a meeting group.
               </p>
             </>
           ) : !topic ? (
             <EmptyHint
               title={`Add a topic in ${org.name}`}
-              body="Example: Competitive Strategies. Meeting groups and files live under a topic."
+              body="Group related meetings — a project, account, or workstream."
             />
           ) : !group ? (
             <EmptyHint
               title={`Add a meeting group in ${topic.name}`}
-              body="Example: Lecture Class 1. Audio and transcripts will land here."
+              body="Recordings and transcripts for a meeting live here."
             />
           ) : (
             <div className="flex min-h-0 w-full flex-1 flex-col items-stretch text-left">

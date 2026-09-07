@@ -14,6 +14,7 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build --bundles dmg,app",
     "tauri:build:windows": "tauri build --bundles nsis",
+    "icons:generate": "bash scripts/generate-app-icons.sh",
     "sidecar:whisper": "bash scripts/build_whisper_sidecar.sh"
   },
   "dependencies": {
