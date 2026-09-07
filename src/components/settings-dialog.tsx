@@ -35,8 +35,8 @@ export function SettingsDialog({ open, configured, onOpenChange, onChanged }: Pr
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
-            BellaNote stores the OpenAI token in the macOS keychain. Chat uses gpt-4o and never
-            uploads audio.
+            BellaNote stores the OpenAI token in the OS credential store (macOS Keychain or
+            Windows Credential Manager). Chat uses gpt-4o and never uploads audio.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-2">

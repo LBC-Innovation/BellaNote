@@ -37,17 +37,24 @@ pub struct Transcriber {
 }
 
 fn host_triple() -> &'static str {
-    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-    {
+    if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
         "aarch64-apple-darwin"
-    }
-    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-    {
+    } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
         "x86_64-apple-darwin"
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
+    } else if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
+        "x86_64-pc-windows-msvc"
+    } else if cfg!(all(target_os = "windows", target_arch = "aarch64")) {
+        "aarch64-pc-windows-msvc"
+    } else {
         "unknown"
+    }
+}
+
+fn sidecar_file_name(triple: &str) -> String {
+    if triple.contains("windows") {
+        format!("transcribe-worker-{triple}.exe")
+    } else {
+        format!("transcribe-worker-{triple}")
     }
 }
 
@@ -63,7 +70,11 @@ fn sidecar_path() -> Option<PathBuf> {
     }
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
-            let next_to_app = dir.join("transcribe-worker");
+            let next_to_app = if cfg!(windows) {
+                dir.join("transcribe-worker.exe")
+            } else {
+                dir.join("transcribe-worker")
+            };
             if next_to_app.is_file() {
                 return Some(next_to_app);
             }
@@ -71,7 +82,7 @@ fn sidecar_path() -> Option<PathBuf> {
     }
     let packaged = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("binaries")
-        .join(format!("transcribe-worker-{}", host_triple()));
+        .join(sidecar_file_name(host_triple()));
     if packaged.is_file() {
         return Some(packaged);
     }
@@ -89,11 +100,20 @@ fn default_python() -> PathBuf {
     if let Ok(p) = std::env::var("ECHO_PYTHON") {
         return PathBuf::from(p);
     }
-    let venv = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.venv/bin/python3");
-    if venv.is_file() {
-        return venv;
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let unix = manifest.join("../.venv/bin/python3");
+    if unix.is_file() {
+        return unix;
     }
-    PathBuf::from("python3")
+    let windows = manifest.join("../.venv/Scripts/python.exe");
+    if windows.is_file() {
+        return windows;
+    }
+    if cfg!(windows) {
+        PathBuf::from("python")
+    } else {
+        PathBuf::from("python3")
+    }
 }
 
 pub fn whisper_model() -> String {
@@ -132,8 +152,14 @@ fn spawn_worker(app: &AppHandle) -> Result<Child> {
     apply_worker_args(&mut cmd, app);
     cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()
+        .stderr(Stdio::inherit());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd.spawn()
         .context("failed to start the transcription worker")
 }
 

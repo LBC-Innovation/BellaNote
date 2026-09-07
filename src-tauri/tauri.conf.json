@@ -38,12 +38,20 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["dmg", "app"],
+    "targets": ["dmg", "app", "nsis"],
     "externalBin": ["binaries/transcribe-worker"],
     "macOS": {
       "minimumSystemVersion": "13.0",
       "entitlements": "entitlements.plist",
       "infoPlist": "Info.plist"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser"
+      }
     },
     "icon": [
       "icons/32x32.png",

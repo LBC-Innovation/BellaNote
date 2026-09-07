@@ -1,11 +1,11 @@
 # BellaNote — First-slice user stories
 
-**Document status:** First Mac slice implemented — stories rewritten to the shipped app, not the original draft  
-**Last review:** 6 September 2026 (record meeting: microphone + macOS system audio)  
-**Platform:** macOS desktop app (Tauri 2); microphone also runs on Windows, system audio does not  
-**Slice goal:** A student (or anyone with a similar hierarchy) can create an organization and topic categories, file audio and existing transcripts into meeting groups, record from the microphone (or system + mic on a Mac), and ask natural-language questions against a chosen scope.
+**Document status:** First Mac + Windows slice implemented — stories rewritten to the shipped app, not the original draft  
+**Last review:** 6 September 2026 (Windows parity: WASAPI system audio + NSIS installer)  
+**Platform:** macOS (Apple Silicon) and Windows desktop app (Tauri 2); system audio uses ScreenCaptureKit on Mac and WASAPI loopback on Windows  
+**Slice goal:** A student (or anyone with a similar hierarchy) can create an organization and topic categories, file audio and existing transcripts into meeting groups, record from the microphone or system + mic, and ask natural-language questions against a chosen scope.
 
-This slice is narrower than the full [`PRODUCT_SCOPE.md`](./PRODUCT_SCOPE.md). Windows system-audio loopback, summaries, task extraction, and a sharing backend are **out**. The Duke example below is the north-star walkthrough.
+This slice is narrower than the full [`PRODUCT_SCOPE.md`](./PRODUCT_SCOPE.md). Summaries, task extraction, and a sharing backend are **out**. The Duke example below is the north-star walkthrough.
 
 ---
 
@@ -25,7 +25,7 @@ Stories that shipped differently from the original draft were updated to the imp
 
 ## North-star walkthrough (Duke)
 
-1. Launch BellaNote on a Mac.  
+1. Launch BellaNote on a Mac or Windows PC.  
 2. Create organization **Duke**.  
 3. Under Duke, create topic category **Competitive Strategies**.  
 4. Inside that topic, create meeting groups **Lecture Class 1**, **Lecture Class 2**, **Mid Term Study Session**.  
@@ -67,11 +67,11 @@ Duke                          ← Organization
 
 | In (shipped unless noted) | Out |
 |---|---|
-| Launch on Mac | Windows system-audio (WASAPI) loopback |
+| Launch on Mac and Windows | Audience-aware summaries, task extraction |
 | Create / rename / delete org, topic, meeting group | YouTube URL ingest |
-| Record microphone (Mac and Windows) | Audience-aware summaries, task extraction |
-| Record system + mic on macOS (ScreenCaptureKit audio + cpal mic) | Sharing / multi-user backend |
-| Upload one or more audio files → one-shot `small.en` on device; queue extras | Calendar, speaker diarization |
+| Record microphone (Mac and Windows) | Sharing / multi-user backend |
+| Record system + mic on macOS (ScreenCaptureKit audio + cpal mic) and Windows (WASAPI loopback + cpal mic) | Calendar, speaker diarization |
+| Upload one or more audio files → one-shot `small.en` on device; queue extras | |
 | Import one or more `.vtt` / `.srt` / `.txt` | Mobile |
 | View artifacts in the hierarchy; remove one or many with confirm | Move an artifact between groups (US-205, not started) |
 | Static waveform + click-to-seek; play / Follow / speed / clock under the waveform; search filters transcript lines | |
@@ -84,7 +84,7 @@ Duke                          ← Organization
 
 ```
 Epic 1  Launch & hierarchy
-        ~~US-101  Launch the Mac app~~                      Complete
+        ~~US-101  Launch the Mac / Windows app~~            Complete
         ~~US-102  Create an organization~~                  Complete
         ~~US-103  Create a topic category~~                 Complete
         ~~US-104  Create a meeting group~~                  Complete
@@ -114,20 +114,20 @@ Epic 3  Scoped chat
 
 ---
 
-# Epic 1 — Launch the Mac app and build the hierarchy
+# Epic 1 — Launch the app and build the hierarchy
 
-## ~~US-101 — Launch BellaNote on a Mac~~
+## ~~US-101 — Launch BellaNote on a Mac or Windows PC~~
 
 **Status:** Complete
 
-**As a** student on a Mac,  
+**As a** student on a Mac or Windows PC,  
 **I want** to open BellaNote like any other desktop app,  
 **so that** I can start organizing class material without a browser or account.
 
 **Acceptance**
 
-- A standard macOS Tauri app launches to a local three-pane workspace (Library, Transcript, Chat).  
-- The titlebar has layout buttons (Library only / Transcript only / Chat only) and Settings. The empty middle strip is the window drag region so those buttons stay clickable under the macOS overlay traffic lights.  
+- A standard Tauri app launches to a local three-pane workspace (Library, Transcript, Chat).  
+- The titlebar has layout buttons (Library only / Transcript only / Chat only) and Settings. The empty middle strip is the window drag region. On macOS, left inset clears the overlay traffic lights; on Windows, right inset clears the caption buttons.  
 - No sign-in is required.  
 - First launch shows an empty library (“Start with an organization”) and a workspace prompt to create an organization.  
 - Closing and reopening restores organizations, topics, groups, and artifacts from local SQLite.  
@@ -155,7 +155,7 @@ Epic 3  Scoped chat
 
 - **Given** BellaNote is already open  
 - **When** I launch it again  
-- **Then** macOS brings the existing window forward (one app window)
+- **Then** macOS or Windows brings the existing window forward (one app window)
 
 **Permissions (this slice)**
 
@@ -900,7 +900,7 @@ Epic 3  Scoped chat
 
 ## ~~US-210 — Record system audio and the microphone~~
 
-**Status:** Complete (macOS). Windows system audio is stubbed.
+**Status:** Complete (macOS ScreenCaptureKit; Windows WASAPI loopback)
 
 **As a** person in a virtual meeting,  
 **I want** BellaNote to capture what I hear and what I say on one timeline,  
@@ -908,9 +908,9 @@ Epic 3  Scoped chat
 
 **Acceptance**
 
-- **Record Meeting → System audio** on macOS captures display audio via ScreenCaptureKit and the microphone via `cpal`, mixed with gain staging and a soft limiter.  
-- macOS asks for Screen Recording (system audio) and Microphone. BellaNote does not save video.  
-- On Windows, choosing System audio does not start capture; a message says it is not available yet. Microphone still works.  
+- **Record Meeting → System audio** captures display/playback audio and the microphone via `cpal`, mixed with gain staging and a soft limiter.  
+- macOS uses ScreenCaptureKit audio (not video) plus the microphone, and asks for Screen Recording and Microphone.  
+- Windows uses WASAPI loopback of the default playback device (“what you hear”) plus the microphone. Headphones avoid speaker echo into the mic.  
 - While recording, a short consent line is visible: you are capturing audio on this device.  
 - Mixed audio is one 48 kHz stereo `source.wav` (system L/R preserved; mic centered). Whisper still transcribes a 16 kHz mono downmix.
 
@@ -923,12 +923,12 @@ Epic 3  Scoped chat
 - **Then** the artifact contains meeting playback mixed with my voice  
 - **And** the transcript covers both
 
-**Windows system audio**
+**Virtual meeting on Windows**
 
-- **Given** I am on Windows  
-- **When** I choose **Record Meeting → System audio**  
-- **Then** recording does not start  
-- **And** I see that system audio is not available on Windows yet
+- **Given** I am on Windows with a playback device and Zoom or Teams is playing  
+- **When** I choose **Record Meeting → System audio**, speak, then Stop  
+- **Then** the artifact contains meeting playback mixed with my voice  
+- **And** the transcript covers both
 
 ---
 
@@ -1007,7 +1007,7 @@ Epic 3  Scoped chat
 **Acceptance**
 
 - Header Settings has a single password field for an OpenAI API token.  
-- The token is stored in the macOS keychain (`com.bellanote.app` / `openai_api_key`), not in a plaintext project file.  
+- The token is stored in the OS credential store (`com.bellanote.app` / `openai_api_key`): macOS Keychain or Windows Credential Manager, not a plaintext project file.  
 - The field can be replaced or cleared. When a token is saved, the field shows a masked placeholder.  
 - Chat uses `gpt-4o`. The composer explains that a token is needed until one is saved. Sending without a token opens Settings.  
 - We do not display the stored token.
@@ -1365,7 +1365,7 @@ Still open from this slice:
 4. **US-304** — Thread archive / list of recent threads  
 5. **US-305** — Expandable scope-preview file list  
 
-Then the product-scope work that was always out of this slice: Windows WASAPI system audio, summaries, tasks, YouTube, sharing.
+Then the product-scope work that was always out of this slice: summaries, tasks, YouTube, sharing.
 
 ---
 
@@ -1378,7 +1378,7 @@ Then the product-scope work that was always out of this slice: Windows WASAPI sy
 | Meeting groups = Lecture Class 1 / 2, Mid Term Study Session | US-104 |
 | Upload audio provided after the fact | US-201, US-202 |
 | Recordings I made while I was there (as files) | US-201 |
-| Record live from this Mac | US-209, US-210 |
+| Record live from this Mac or Windows PC | US-209, US-210 |
 | Transcripts downloaded from Zoom | US-203 |
 | Find a phrase in a long transcript | US-207 |
 | Pin a thought to a moment in the lecture | US-208 |

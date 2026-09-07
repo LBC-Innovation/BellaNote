@@ -207,7 +207,7 @@ function RecordMeetingControl({
   async function pick(source: "voice" | "system") {
     setOpen(false);
     if (source === "system" && !systemAudioAvailable) {
-      toast.error("System audio capture is not available on Windows yet.");
+      toast.error("System audio capture is not available on this device.");
       return;
     }
     try {

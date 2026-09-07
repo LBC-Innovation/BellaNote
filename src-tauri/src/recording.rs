@@ -81,7 +81,7 @@ pub struct StartRecordingResult {
 pub fn capabilities() -> RecordingCapabilities {
     RecordingCapabilities {
         microphone: true,
-        system_audio: cfg!(target_os = "macos"),
+        system_audio: cfg!(any(target_os = "macos", target_os = "windows")),
     }
 }
 
@@ -160,9 +160,9 @@ pub async fn start_recording(
     }
 
     let mode = parse_mode(&source)?;
-    if mode == CaptureMode::SystemAudio && !cfg!(target_os = "macos") {
+    if mode == CaptureMode::SystemAudio && !cfg!(any(target_os = "macos", target_os = "windows")) {
         return Err(AppError::Message(
-            "System audio capture is not available on Windows yet.".into(),
+            "System audio capture is not available on this platform.".into(),
         ));
     }
 
@@ -208,9 +208,10 @@ pub async fn start_recording(
     let wav_writer = match create_wav_writer(&in_progress_path, spec) {
         Ok(w) => w,
         Err(e) => {
-            let _ = state
-                .db
-                .set_artifact_status(&id, "failed", "Could not start the recording file.");
+            let _ =
+                state
+                    .db
+                    .set_artifact_status(&id, "failed", "Could not start the recording file.");
             let _ = app.emit("artifact-updated", &id);
             return Err(AppError::Message(e));
         }
@@ -235,11 +236,10 @@ pub async fn start_recording(
     let capture = match capture {
         Ok(c) => c,
         Err(e) => {
-            let _ = state.db.set_artifact_status(
-                &id,
-                "failed",
-                &human_capture_error(&e.to_string()),
-            );
+            let _ =
+                state
+                    .db
+                    .set_artifact_status(&id, "failed", &human_capture_error(&e.to_string()));
             let _ = app.emit("artifact-updated", &id);
             return Err(AppError::Message(human_capture_error(&e.to_string())));
         }
@@ -322,11 +322,9 @@ pub async fn start_recording(
                 stream_offset_samples += n as u64;
             }
             if cancelled {
-                let _ = whisper_state.db.set_artifact_status(
-                    &whisper_id,
-                    "transcribing",
-                    "",
-                );
+                let _ = whisper_state
+                    .db
+                    .set_artifact_status(&whisper_id, "transcribing", "");
                 let _ = whisper_app.emit("artifact-updated", &whisper_id);
                 break;
             }
@@ -355,11 +353,10 @@ pub async fn start_recording(
     });
 
     let input_label = match mode {
-        CaptureMode::Voice => crate::capture::mic::default_input_device_name()
-            .unwrap_or_else(|_| "Microphone".into()),
-        CaptureMode::SystemAudio => {
-            "System + mic (what you hear and what you say)".to_string()
+        CaptureMode::Voice => {
+            crate::capture::mic::default_input_device_name().unwrap_or_else(|_| "Microphone".into())
         }
+        CaptureMode::SystemAudio => "System + mic (what you hear and what you say)".to_string(),
     };
 
     let session = RecordingSession {
@@ -451,11 +448,22 @@ fn finalize_wav(session: &RecordingSession) {
 
 fn human_capture_error(text: &str) -> String {
     let lower = text.to_lowercase();
-    if lower.contains("windows yet") {
-        return "System audio capture is not available on Windows yet.".into();
-    }
     if lower.contains("no default input") || lower.contains("microphone") {
-        return "BellaNote couldn’t use the microphone. Check System Settings → Privacy & Security.".into();
+        #[cfg(target_os = "windows")]
+        {
+            return "BellaNote couldn’t use the microphone. Check Settings → Privacy & security → Microphone.".into();
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            return "BellaNote couldn’t use the microphone. Check System Settings → Privacy & Security.".into();
+        }
+    }
+    if lower.contains("wasapi")
+        || lower.contains("loopback")
+        || lower.contains("playback device")
+        || lower.contains("render")
+    {
+        return "BellaNote couldn’t capture system audio. Check that a playback device is available, then try again.".into();
     }
     if lower.contains("screen") || lower.contains("shareable") || lower.contains("display") {
         return "BellaNote needs Screen Recording permission to capture system audio. Check System Settings → Privacy & Security.".into();

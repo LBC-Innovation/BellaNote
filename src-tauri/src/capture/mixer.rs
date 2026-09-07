@@ -106,6 +106,53 @@ impl SystemMicMixer {
     }
 }
 
+/// Interleaved PCM to stereo frames. Never averages L+R into one stream.
+pub(crate) fn pcm_interleaved_to_stereo_f32(
+    bytes: &[u8],
+    channels: usize,
+    bits: u16,
+    is_float: bool,
+) -> Vec<[f32; 2]> {
+    let channels = channels.max(1);
+    if is_float {
+        let step = 4 * channels;
+        if step == 0 || bytes.len() < step {
+            return Vec::new();
+        }
+        return bytes
+            .chunks_exact(step)
+            .map(|frame| {
+                let l = f32::from_le_bytes(frame[0..4].try_into().unwrap());
+                let r = if channels >= 2 {
+                    f32::from_le_bytes(frame[4..8].try_into().unwrap())
+                } else {
+                    l
+                };
+                [l, r]
+            })
+            .collect();
+    }
+    if bits == 16 {
+        let step = 2 * channels;
+        if step == 0 || bytes.len() < step {
+            return Vec::new();
+        }
+        return bytes
+            .chunks_exact(step)
+            .map(|frame| {
+                let l = i16::from_le_bytes([frame[0], frame[1]]) as f32 / 32768.0;
+                let r = if channels >= 2 {
+                    i16::from_le_bytes([frame[2], frame[3]]) as f32 / 32768.0
+                } else {
+                    l
+                };
+                [l, r]
+            })
+            .collect();
+    }
+    Vec::new()
+}
+
 /// Soft-clip toward ±1 instead of hard clamp, so mixed peaks don't brick-wall.
 fn soft_limit(x: f32) -> f32 {
     const KNEE: f32 = 0.9;
@@ -139,5 +186,23 @@ mod tests {
         assert!(soft_limit(4.0) <= 1.0);
         assert!(soft_limit(-4.0) >= -1.0);
         assert!(soft_limit(1.5).abs() < 1.5);
+    }
+
+    #[test]
+    fn interleaved_float_stereo_keeps_left_and_right() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&0.25f32.to_le_bytes());
+        bytes.extend_from_slice(&(-0.5f32).to_le_bytes());
+        let frames = super::pcm_interleaved_to_stereo_f32(&bytes, 2, 32, true);
+        assert_eq!(frames.len(), 1);
+        assert!((frames[0][0] - 0.25).abs() < f32::EPSILON);
+        assert!((frames[0][1] + 0.5).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn interleaved_float_mono_duplicates_to_both_sides() {
+        let bytes = 0.8f32.to_le_bytes();
+        let frames = super::pcm_interleaved_to_stereo_f32(&bytes, 1, 32, true);
+        assert_eq!(frames, vec![[0.8, 0.8]]);
     }
 }
