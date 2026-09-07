@@ -42,39 +42,53 @@ export function Titlebar({
   onOpenSettings: () => void;
 }) {
   return (
-    <header className="flex h-12 shrink-0 items-stretch">
-      {isMac() ? <div className="w-[72px] shrink-0" /> : <div className="w-3 shrink-0" />}
-      <div className="flex min-w-0 flex-1 items-center" data-tauri-drag-region>
-        <span className="pointer-events-none select-none text-sm font-semibold tracking-tight">
-          BellaNote
-        </span>
+    <header className="flex shrink-0 flex-col">
+      {isMac() ? <div className="h-8 w-full shrink-0" data-tauri-drag-region /> : null}
+      <div className="flex h-12 items-stretch">
+        {isMac() ? null : <div className="w-3 shrink-0" />}
+        <div
+          className={cn("flex min-w-0 flex-1 items-center gap-2", isMac() && "pl-3")}
+          data-tauri-drag-region
+        >
+          <img
+            src="/logo.svg"
+            alt=""
+            width={22}
+            height={28}
+            draggable={false}
+            className="pointer-events-none h-7 w-auto select-none"
+          />
+          <span className="pointer-events-none select-none text-sm font-semibold tracking-tight">
+            BellaNote
+          </span>
+        </div>
+        <nav className="flex shrink-0 items-center gap-1 px-3" aria-label="Window layout">
+          <TitlebarButton
+            label="Show library only"
+            pressed={layoutFocus === "library"}
+            onClick={() => onShowOnly("library")}
+          >
+            <PanelLeft className="size-4" />
+          </TitlebarButton>
+          <TitlebarButton
+            label="Show transcript only"
+            pressed={layoutFocus === "transcript"}
+            onClick={() => onShowOnly("transcript")}
+          >
+            <FileText className="size-4" />
+          </TitlebarButton>
+          <TitlebarButton
+            label="Show chat only"
+            pressed={layoutFocus === "chat"}
+            onClick={() => onShowOnly("chat")}
+          >
+            <MessageCircle className="size-4" />
+          </TitlebarButton>
+          <TitlebarButton label="Settings" onClick={onOpenSettings}>
+            <Settings2 className="size-4" />
+          </TitlebarButton>
+        </nav>
       </div>
-      <nav className="flex shrink-0 items-center gap-1 px-3" aria-label="Window layout">
-        <TitlebarButton
-          label="Show library only"
-          pressed={layoutFocus === "library"}
-          onClick={() => onShowOnly("library")}
-        >
-          <PanelLeft className="size-4" />
-        </TitlebarButton>
-        <TitlebarButton
-          label="Show transcript only"
-          pressed={layoutFocus === "transcript"}
-          onClick={() => onShowOnly("transcript")}
-        >
-          <FileText className="size-4" />
-        </TitlebarButton>
-        <TitlebarButton
-          label="Show chat only"
-          pressed={layoutFocus === "chat"}
-          onClick={() => onShowOnly("chat")}
-        >
-          <MessageCircle className="size-4" />
-        </TitlebarButton>
-        <TitlebarButton label="Settings" onClick={onOpenSettings}>
-          <Settings2 className="size-4" />
-        </TitlebarButton>
-      </nav>
     </header>
   );
 }

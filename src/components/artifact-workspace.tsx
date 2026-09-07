@@ -690,7 +690,7 @@ function FilesTable({
   if (artifacts.length === 0) {
     return (
       <p className="px-2 py-8 text-sm text-muted-foreground">
-        Add an audio file or a Zoom/Teams transcript.
+        Record a meeting, or import audio or a transcript.
       </p>
     );
   }

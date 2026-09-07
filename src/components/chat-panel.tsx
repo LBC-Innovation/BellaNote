@@ -55,8 +55,8 @@ function MessageMeta({ name, at }: { name: string; at?: string }) {
 function ThinkingBubble({ at }: { at: string }) {
   return (
     <div className="thinking-bubble rounded-2xl bg-black/20 px-4 py-3.5">
-      <MessageMeta name="BellaNote" at={at} />
-      <div className="flex items-center gap-2 py-1" aria-live="polite" aria-label="BellaNote is thinking">
+      <MessageMeta name="Bella" at={at} />
+      <div className="flex items-center gap-2 py-1" aria-live="polite" aria-label="Bella is thinking">
         <span className="flex items-center gap-1">
           <span className="chat-dot size-1.5 rounded-full bg-primary" />
           <span className="chat-dot size-1.5 rounded-full bg-primary" style={{ animationDelay: "0.16s" }} />
@@ -233,8 +233,7 @@ export function ChatPanel({
         </p>
       ) : (
         <p className="mt-6 text-sm leading-relaxed text-muted-foreground">
-          Select a meeting group and add a transcript, then ask across the organization, topic, group,
-          or this file.
+          Pick a meeting group with a transcript, then ask what was said or decided.
         </p>
       )}
 
@@ -249,7 +248,7 @@ export function ChatPanel({
               )}
             >
               <MessageMeta
-                name={message.role === "user" ? "You" : "BellaNote"}
+                name={message.role === "user" ? "You" : "Bella"}
                 at={message.createdAt}
               />
               {message.role === "assistant" ? (

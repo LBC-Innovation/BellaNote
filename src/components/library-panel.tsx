@@ -271,7 +271,7 @@ export function LibraryPanel({
               <div className="px-1 pt-6">
                 <h2 className="text-base font-semibold tracking-tight">Start with an organization</h2>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  Example: Duke, then Competitive Strategies, then Lecture Class 1.
+                  Then a topic, then a meeting group for recordings and transcripts.
                 </p>
               </div>
             ) : (
@@ -303,11 +303,11 @@ export function LibraryPanel({
         title={createTitle}
         description={
           dialog?.type === "create-org"
-            ? "School, company, or client. Topics live under this."
+            ? "A company, team, or client. Topics live under this."
             : dialog?.type === "create-topic"
-              ? "A class or subject inside this organization."
+              ? "A project or workstream inside this organization."
               : dialog?.type === "create-group"
-                ? "A lecture, study session, or other bundle of files."
+                ? "One meeting, or a related series of sessions."
                 : "This updates the name everywhere, including chat scope."
         }
         confirmLabel={dialog?.type === "rename" ? "Save" : "Create"}

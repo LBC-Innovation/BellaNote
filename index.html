@@ -4,8 +4,162 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>BellaNote</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/logo.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #12161c;
+      }
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1.25rem;
+        background:
+          radial-gradient(1200px 700px at 12% -10%, rgb(46 78 96 / 0.28), transparent 55%),
+          radial-gradient(900px 600px at 110% 10%, rgb(90 180 160 / 0.14), transparent 50%),
+          radial-gradient(800px 500px at 50% 120%, rgb(28 42 62 / 0.35), transparent 55%),
+          #12161c;
+        transition: opacity 320ms ease;
+      }
+      #splash .ambient {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        pointer-events: none;
+      }
+      #splash .origin {
+        position: absolute;
+        width: min(130vmin, 1180px);
+        height: min(130vmin, 1180px);
+      }
+      #splash .o1 {
+        left: -8%;
+        top: -14%;
+      }
+      #splash .o2 {
+        right: -12%;
+        top: 6%;
+      }
+      #splash .o3 {
+        left: 18%;
+        bottom: -28%;
+      }
+      #splash .origin i {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle closest-side,
+          transparent 58%,
+          rgb(184 252 226 / 0.42) 62%,
+          transparent 67%
+        );
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: 22% 22%;
+        animation: splash-converge 6.2s cubic-bezier(0.16, 0.52, 0.28, 1) infinite;
+        animation-delay: -0.12s;
+      }
+      /* Negative delays so several rings are already expanding together. */
+      #splash .origin i:nth-child(2) {
+        animation-delay: -2.05s;
+      }
+      #splash .origin i:nth-child(3) {
+        animation-delay: -4.1s;
+      }
+      #splash .o2 i {
+        animation-delay: -0.22s;
+      }
+      #splash .o2 i:nth-child(2) {
+        animation-delay: -2.28s;
+      }
+      #splash .o2 i:nth-child(3) {
+        animation-delay: -4.32s;
+      }
+      #splash .o3 i {
+        animation-delay: -0.4s;
+      }
+      #splash .o3 i:nth-child(2) {
+        animation-delay: -2.48s;
+      }
+      #splash .o3 i:nth-child(3) {
+        animation-delay: -4.55s;
+      }
+      #splash .mark {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #splash img {
+        height: min(42vh, 280px);
+        width: auto;
+      }
+      #splash .name {
+        position: relative;
+        z-index: 1;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        font-size: 1.25rem;
+        font-weight: 600;
+        letter-spacing: -0.03em;
+        color: #e8eaed;
+      }
+      #splash.is-hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      @keyframes splash-converge {
+        0% {
+          background-size: 22% 22%;
+          opacity: 0.72;
+        }
+        42% {
+          opacity: 0.34;
+        }
+        100% {
+          background-size: 158% 158%;
+          opacity: 0;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #splash .origin i {
+          animation: none;
+          opacity: 0.22;
+          background-size: 88% 88%;
+        }
+        #splash .origin i:nth-child(2) {
+          background-size: 118% 118%;
+          opacity: 0.14;
+        }
+        #splash .origin i:nth-child(3) {
+          background-size: 148% 148%;
+          opacity: 0.1;
+        }
+      }
+    </style>
   </head>
   <body>
+    <div id="splash" role="status" aria-live="polite" aria-label="BellaNote is starting">
+      <div class="ambient" aria-hidden="true">
+        <span class="origin o1"><i></i><i></i><i></i></span>
+        <span class="origin o2"><i></i><i></i><i></i></span>
+        <span class="origin o3"><i></i><i></i><i></i></span>
+      </div>
+      <div class="mark">
+        <img src="/logo.svg" alt="" />
+      </div>
+      <div class="name">BellaNote</div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
