@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 # Rasterize Media/Logo.svg into Tauri, installer, and in-app icon files.
+#
+# The dock/taskbar mark is the speech-bubble logo on a fully transparent
+# square — no nested glass plate. A rounded fill inside the 1024 canvas
+# reads as a shrunken glyph on a gray tile once macOS applies its own
+# squircle to the bundled .icns (dev mode shows the PNG alpha as-is).
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,32 +30,66 @@ cp "$src" "$public/logo.svg"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-# Keep the portrait mark sharp, then place it on a rounded glass plate.
+write_png() {
+  local dest="$1"
+  shift
+  local out="$tmp/write-png.png"
+  magick "$@" \
+    -strip \
+    -define png:exclude-chunks=bKGD,gAMA,cHRM,tEXt,zTXt,date \
+    -depth 8 \
+    PNG32:"$out"
+  mkdir -p "$(dirname "$dest")"
+  mv -f "$out" "$dest"
+}
+
+# Keep the portrait mark sharp, then fit it to the full 1024 canvas.
 magick -background none "$src" -resize x2400 "$tmp/mark.png"
 
-# Transparent canvas, then a rounded glass plate, then the centered mark.
-# A single -composite with three images treats the third as a mask — layer them in two steps.
-magick -size 1024x1024 xc:none \
-  -fill "rgba(18,22,28,0.16)" \
-  -stroke "rgba(184,252,226,0.48)" \
-  -strokewidth 10 \
-  -draw "roundrectangle 56,56 967,967 280,280" \
-  PNG32:"$tmp/plate.png"
-
-magick "$tmp/plate.png" \
-  \( "$tmp/mark.png" -resize x640 \) \
-  -gravity center -compose over -composite \
-  -depth 8 PNG32:"$icon_src"
+write_png "$icon_src" \
+  -size 1024x1024 xc:none \
+  \( "$tmp/mark.png" -resize 1024x1024 \) \
+  -gravity center -compose over -composite
 
 npx tauri icon "$icon_src" -o "$icons"
 # Desktop-only product — drop mobile icon trees the CLI still emits.
 rm -rf "$icons/ios" "$icons/android"
 
-magick "$icon_src" -resize 32x32 "$public/favicon-32.png"
-magick "$icon_src" -resize 192x192 "$public/apple-touch-icon.png"
-magick "$icon_src" -define icon:auto-resize=256,128,64,48,32,16 "$public/favicon.ico"
+# `tauri icon` writes a PNG bKGD chunk (white). Finder/Dock use that as a
+# fill behind transparent pixels in the bundled app. Strip it from every
+# PNG the CLI emitted, then mint the .icns with iconutil.
+shopt -s nullglob
+for png in "$icons"/*.png; do
+  write_png "$png" "$png"
+done
+shopt -u nullglob
 
-# NSIS installer chrome (Windows BMP3).
+write_png "$public/favicon-32.png" "$icon_src" -resize 32x32
+write_png "$public/apple-touch-icon.png" "$icon_src" -resize 192x192
+magick "$icon_src" -strip -define icon:auto-resize=256,128,64,48,32,16 "$public/favicon.ico"
+
+if command -v iconutil >/dev/null 2>&1; then
+  iconset="$tmp/AppIcon.iconset"
+  mkdir -p "$iconset"
+  while read -r size name; do
+    write_png "$iconset/${name}.png" "$icon_src" -resize "${size}x${size}"
+  done <<'SIZES'
+16 icon_16x16
+32 icon_16x16@2x
+32 icon_32x32
+64 icon_32x32@2x
+128 icon_128x128
+256 icon_128x128@2x
+256 icon_256x256
+512 icon_256x256@2x
+512 icon_512x512
+1024 icon_512x512@2x
+SIZES
+  iconutil --convert icns --output "$icons/icon.icns" "$iconset"
+fi
+
+# NSIS installer chrome (Windows BMP3) stays on the charcoal plate — that
+# art is a filled banner, not a dock tile.
 magick -size 150x57 "xc:${bg}" \
   \( "$tmp/mark.png" -resize x40 \) \
   -gravity west -geometry +10+0 -composite \
