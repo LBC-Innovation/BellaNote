@@ -26,7 +26,8 @@ export function isRecordingArtifact(artifact: Artifact) {
 }
 
 export function isFailedArtifact(artifact: Artifact) {
-  return artifact.status === "failed";
+  if (artifact.status === "failed") return true;
+  return artifact.status === "ready" && artifact.hasAudio && !artifact.transcript.trim();
 }
 
 export function isLoadableArtifact(artifact: Artifact) {
@@ -44,6 +45,9 @@ export function transcriptionQuality(artifact: Artifact): { kind: QualityKind; l
     return { kind: "importing", label: "Importing" };
   }
   if (artifact.status === "failed") {
+    return { kind: "failed", label: "Failed" };
+  }
+  if (artifact.status === "ready" && artifact.hasAudio && !artifact.transcript.trim()) {
     return { kind: "failed", label: "Failed" };
   }
   if (artifact.sourceType === "transcript_import" || artifact.whisperModel === "imported") {

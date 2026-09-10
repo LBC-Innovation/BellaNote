@@ -35,6 +35,7 @@ pub fn run() {
                 recording: crate::recording::RecordingRuntime::new(),
             });
             let _ = state.db.fail_interrupted_imports();
+            let _ = state.db.fail_empty_ready_audio();
             app.manage(state);
             if let Some(window) = app.get_webview_window("main") {
                 let focused = window.clone();

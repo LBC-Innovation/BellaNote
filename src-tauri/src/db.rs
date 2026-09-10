@@ -653,6 +653,20 @@ impl Db {
         Ok(import_failed + record_failed)
     }
 
+    pub fn fail_empty_ready_audio(&self) -> AppResult<usize> {
+        let conn = self.lock()?;
+        let n = conn.execute(
+            "UPDATE artifacts
+             SET status = 'failed',
+                 error_message = 'Transcription didn’t finish. The recording is saved — you can try again.'
+             WHERE status = 'ready'
+               AND has_audio = 1
+               AND trim(transcript) = ''",
+            [],
+        )?;
+        Ok(n)
+    }
+
     pub fn set_artifact_status(
         &self,
         id: &str,

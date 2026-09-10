@@ -1,6 +1,6 @@
 # Apple Developer ID signing for BellaNote
 
-This is the full path from paying Apple to a signed, notarized GitHub Release. The Release workflow already knows how to sign and notarize. You do **not** change app code. You create a **Developer ID Application** certificate, make this Mac trust the chain, then put six secrets in GitHub Actions.
+This is the full path from paying Apple to a signed, notarized GitHub Release. You create a **Developer ID Application** certificate, make this Mac trust the chain, then put six secrets in GitHub Actions. The Release workflow signs the app, re-signs the Whisper sidecar with its own entitlements, smoke-starts it, then notarizes the `.dmg`.
 
 Paying for the Apple Developer Program does not sign anything by itself. Signing without notarization is also not enough for a browser download. Both happen only after the secrets below exist and you cut a **new** release.
 
@@ -203,18 +203,19 @@ After the secrets are saved, delete `certificate-base64.txt` from Downloads. Kee
 
 ## 9. Run the Release workflow
 
-No workflow or app code change is required once the secrets exist.
+Keep `version` in sync in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml` if you are cutting a new version.
 
-1. Keep `version` in sync in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml` if you are cutting a new version.
-2. **Actions → Release → Run workflow**, or push a tag `v` + that version (example: `v0.1.0-beta.1`).
-3. The macOS job is Apple Silicon only (`macos-latest` / `aarch64-apple-darwin`). Intel Macs are not supported.
-4. Open the **Export Apple signing secrets** step on the macOS job. You want that step **not** to log `No Apple Developer certificate`. If it does, the secrets did not load and the `.dmg` is unsigned — see [`RUNNING_UNSIGNED_VERSIONS.md`](./RUNNING_UNSIGNED_VERSIONS.md). When secrets load, Tauri imports the `.p12`, signs the `.app`, notarizes with Apple, and staples the ticket onto the `.dmg`.
+The macOS job **must not** notarize inside Tauri. Tauri signs the `.app` (and would stamp the Whisper sidecar with the app’s mic/screen entitlements). A later step re-signs `transcribe-worker` with [`entitlements-sidecar.plist`](../src-tauri/entitlements-sidecar.plist) (`disable-library-validation` only — no unsigned executable memory, JIT, or DYLD exceptions), smoke-starts it, builds the `.dmg` from that `.app`, then notarizes and staples.
 
-5. Wait until the macOS job succeeds. Open the **draft** on the repo **Releases** page (not “Create a new release”), download the Apple Silicon `.dmg`, smoke-test it, then publish.
+The main `bellanote` binary keeps [`entitlements.plist`](../src-tauri/entitlements.plist) (mic + screen capture). It must not gain `disable-library-validation`.
 
-## Local signed builds (optional)
+1. **Actions → Release → Run workflow**, or push a tag `v` + that version (example: `v0.1.0-beta.2`).
+2. The macOS job is Apple Silicon only (`macos-latest` / `aarch64-apple-darwin`). Intel Macs are not supported.
+3. Open **Export Apple signing secrets**. You want that step **not** to log `No Apple Developer certificate`. If it does, the `.app` is unsigned — see [`RUNNING_UNSIGNED_VERSIONS.md`](./RUNNING_UNSIGNED_VERSIONS.md). That step exports the certificate and signing identity only. It does **not** export `APPLE_ID` into the Tauri build (that would notarize before the sidecar is re-signed).
+4. Confirm **Re-sign sidecar, smoke, notarize DMG** passes. Failure with `different Team IDs` / `Failed to load Python` means the sidecar still cannot load Python.org’s framework.
+5. Wait until both macOS and Windows jobs succeed. Open the **draft** on the repo **Releases** page (not “Create a new release”), download the Apple Silicon `.dmg`, smoke-test it, then publish.
 
-On this Mac, `npm run tauri:build` can sign from Keychain if these are in the environment: `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`. GitHub Actions still needs the `.p12` secrets; the runner has no copy of your login keychain.
+Local `npm run tauri:build` on this Mac runs the same sidecar re-sign and smoke start after Tauri bundles (`scripts/macos_pack.sh`). Set `APPLE_SIGNING_IDENTITY` (and the other Apple env vars if you want a notarized local disk image). GitHub Actions still needs the `.p12` secrets; the runner has no copy of your login keychain.
 
 ---
 
@@ -228,3 +229,5 @@ On this Mac, `npm run tauri:build` can sign from Keychain if these are in the en
 | Release log: `No Apple Developer certificate` | `APPLE_CERTIFICATE` secret empty or unset | Re-paste the one-line base64; do not create empty secrets. Running that `.dmg` is covered in [`RUNNING_UNSIGNED_VERSIONS.md`](./RUNNING_UNSIGNED_VERSIONS.md) |
 | `security import` / `SecKeychainItemImport` fails in CI | Empty `APPLE_CERTIFICATE` was exported | Same as above; the workflow is supposed to skip export when the secret is empty |
 | Notarization fails | Wrong `APPLE_PASSWORD` (used login password) or wrong Team ID | Use an app-specific password; `APPLE_TEAM_ID` is the 10-character id, not the full identity string |
+| Sidecar dies with `different Team IDs` / `Failed to load Python` | Worker signed with Hardened Runtime but without `disable-library-validation` | Re-sign with `scripts/macos_resign_sidecar.sh`; do not add unsigned-executable-memory or JIT |
+| Main app has `disable-library-validation` | Sidecar and app plists were mixed | App uses `entitlements.plist` only; worker uses `entitlements-sidecar.plist` |

@@ -961,7 +961,7 @@ function FailedTranscript({ artifact }: { artifact: Artifact }) {
   return (
     <div className="flex flex-col items-start gap-3">
       <p className="text-sm text-destructive">
-        {artifact.errorMessage || "This file couldn’t be processed. You can try again."}
+        {artifact.errorMessage || "Transcription didn’t finish. The recording is saved — you can try again."}
       </p>
       {artifact.hasAudio ? (
         <Button
@@ -1518,7 +1518,7 @@ function ArtifactDetail({
           </p>
         ) : artifact.status === "queued" ? (
           <p className="text-sm text-muted-foreground">Waiting to transcribe…</p>
-        ) : artifact.status === "failed" ? (
+        ) : isFailedArtifact(artifact) ? (
           <FailedTranscript artifact={artifact} />
         ) : segments.length > 0 ? (
           visibleSegments.length > 0 ? (
