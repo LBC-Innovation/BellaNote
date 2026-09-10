@@ -558,11 +558,12 @@ Epic 3  Scoped chat
 - Internal status values: `queued`, `transcribing`, `ready`, `failed`.  
 - Files table Quality column: **Pending** (queued), **Importing** + spinner (the job that holds the worker), **small** when ready, **Failed** + **Retry** when failed.  
 - Only the currently transcribing file shows Importing. Other waiting uploads show Pending, use an amber row, and cannot be loaded in the transcript card.  
-- Ready artifacts open to the transcript and are eligible for chat.  
-- Failed artifacts can be opened and show a short error plus Retry in the transcript card.  
+- Ready artifacts have transcript text and are eligible for chat. Audio with an empty transcript is **Failed**, not Ready.  
+- Failed artifacts can be opened and show a short error plus Retry in the transcript card. Retry transcribes BellaNote’s saved copy.  
 - Chat never includes artifacts that are not Ready.  
 - One faster-whisper worker; extra jobs wait on a lock (usually in upload order, not a named FIFO queue).  
 - Quit mid-import marks leftover `queued` / `transcribing` rows as Failed on next launch, with Retry.  
+- Launch also marks leftover `ready` audio rows with an empty transcript as Failed, with Retry.  
 - Clicking an **Importing** row does not load it in the transcript card. A top-center warning toast says **Please wait, this file is importing** (icon + warning colors), then fades.
 
 ### Scenarios
@@ -583,6 +584,14 @@ Epic 3  Scoped chat
 - **And** a Retry button is on the row  
 - **And** opening the row shows a human sentence, not a stack trace  
 - **And** Retry queues the same file again
+
+**Failure — empty transcript after a recording**
+
+- **Given** the audio file was saved  
+- **When** Whisper never returns text (worker crash, no speech, or a prior ready-with-empty row)  
+- **Then** Quality is **Failed**  
+- **And** the transcript card says the recording is saved and can be tried again  
+- **And** Retry transcribes `source.wav` without recording again
 
 **Quit mid-transcribe**
 
@@ -877,7 +886,7 @@ Epic 3  Scoped chat
 - Next to **Import Meeting**, **Record Meeting** opens a dropdown: **Microphone** / **System audio**.  
 - **Microphone** starts capture immediately on the default input (`cpal`). macOS asks for Microphone permission the first time.  
 - One recording at a time. While it runs, Import Meeting is disabled and the control becomes **Stop · MM:SS**.  
-- A new artifact appears in Files with status **Recording**. Chunks of transcript may appear while capturing. Stop is instant; trailing Whisper work may still finish.  
+- A new artifact appears in Files with status **Recording**. Chunks of transcript may appear while capturing. Stop is instant; BellaNote then transcribes the saved `source.wav` (status **Importing**) and must not mark Ready with an empty transcript.  
 - The recording is stored as `library/{id}/source.wav` and plays like an imported audio file once Ready. Microphone-only is 16 kHz dual-mono; system + mic is 48 kHz stereo.  
 - Closing BellaNote mid-record marks the row Failed.
 

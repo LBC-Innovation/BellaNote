@@ -261,7 +261,13 @@ pub async fn start_recording(
         let mut stream_offset_samples: u64 = 0;
         loop {
             ticker.tick().await;
-            let cancelled = whisper_cancel.load(Ordering::Acquire);
+            if whisper_cancel.load(Ordering::Acquire) {
+                let _ = whisper_state
+                    .db
+                    .set_artifact_status(&whisper_id, "transcribing", "");
+                let _ = whisper_app.emit("artifact-updated", &whisper_id);
+                break;
+            }
             let mut chunk: Vec<f32> = Vec::with_capacity(chunk_samples);
             while let Some(s) = consumer.pop() {
                 chunk.push(s);
@@ -270,12 +276,7 @@ pub async fn start_recording(
                 }
             }
             let n = chunk.len();
-            let enough = if cancelled {
-                n > 1_600
-            } else {
-                n >= min_chunk_samples
-            };
-            if enough {
+            if n >= min_chunk_samples {
                 let chunk_start_ms = (stream_offset_samples * 1000) / u64::from(SAMPLE_RATE);
                 stream_offset_samples += n as u64;
                 let samples = chunk;
@@ -321,35 +322,9 @@ pub async fn start_recording(
             } else {
                 stream_offset_samples += n as u64;
             }
-            if cancelled {
-                let _ = whisper_state
-                    .db
-                    .set_artifact_status(&whisper_id, "transcribing", "");
-                let _ = whisper_app.emit("artifact-updated", &whisper_id);
-                break;
-            }
         }
-        let duration_ms = ((stream_offset_samples * 1000) / u64::from(SAMPLE_RATE)) as i64;
-        let full_text: String = all_segments
-            .iter()
-            .map(|s| s.text.as_str())
-            .collect::<Vec<_>>()
-            .join(" ");
-        let segments_json = serde_json::to_string(&all_segments).unwrap_or_else(|_| "[]".into());
-        let _ = whisper_state.db.set_artifact_transcript(
-            &whisper_id,
-            &full_text,
-            &segments_json,
-            duration_ms.max(
-                all_segments
-                    .iter()
-                    .map(|s| s.end_ms)
-                    .max()
-                    .unwrap_or(duration_ms),
-            ),
-            &crate::transcribe::whisper_model(),
-        );
-        let _ = whisper_app.emit("artifact-updated", &whisper_id);
+        // Full-file transcribe of source.wav runs from stop_recording. Never
+        // stamp ready on an empty live buffer.
     });
 
     let input_label = match mode {
@@ -393,7 +368,7 @@ pub async fn stop_recording(app: AppHandle, state: Arc<AppState>) -> AppResult<A
     finalize_wav(&session);
 
     if let Some(join) = session.whisper_join.lock().unwrap().take() {
-        // Trailing Whisper keeps running; stop returns immediately.
+        // Trailing live chunks stop; full-file Whisper runs below.
         drop(join);
     }
 
@@ -405,6 +380,22 @@ pub async fn stop_recording(app: AppHandle, state: Arc<AppState>) -> AppResult<A
         );
         let _ = app.emit("artifact-updated", &session.artifact_id);
         return Err(AppError::Message(human_capture_error(&e.to_string())));
+    }
+
+    if session.source_path.is_file() {
+        crate::artifacts::spawn_transcribe(
+            app.clone(),
+            Arc::clone(&state),
+            session.artifact_id.clone(),
+            session.source_path.clone(),
+        );
+    } else {
+        let _ = state.db.set_artifact_status(
+            &session.artifact_id,
+            "failed",
+            "BellaNote couldn’t save this recording.",
+        );
+        let _ = app.emit("artifact-updated", &session.artifact_id);
     }
 
     let _ = state.recording.rms_tx.send(0.0);

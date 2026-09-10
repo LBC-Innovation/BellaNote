@@ -89,7 +89,10 @@ pub fn retry_artifact(app: &AppHandle, state: &Arc<AppState>, id: &str) -> AppRe
     if artifact.status == "queued" || artifact.status == "transcribing" || artifact.status == "recording" {
         return Err(AppError::Message("This file is already importing.".into()));
     }
-    if artifact.status != "failed" {
+    let empty_ready = artifact.status == "ready"
+        && artifact.has_audio
+        && artifact.transcript.trim().is_empty();
+    if artifact.status != "failed" && !empty_ready {
         return Err(AppError::Message("Only failed imports can be retried.".into()));
     }
     if !artifact.has_audio {
@@ -188,7 +191,7 @@ pub fn find_audio_path(app: &AppHandle, id: &str) -> Option<PathBuf> {
     })
 }
 
-fn spawn_transcribe(app: AppHandle, state: Arc<AppState>, id: String, audio_path: PathBuf) {
+pub(crate) fn spawn_transcribe(app: AppHandle, state: Arc<AppState>, id: String, audio_path: PathBuf) {
     std::thread::spawn(move || {
         let result = (|| {
             let mut slot = state
@@ -203,21 +206,36 @@ fn spawn_transcribe(app: AppHandle, state: Arc<AppState>, id: String, audio_path
             slot.as_ref().unwrap().transcribe_path(&audio_path)
         })();
         match result {
+            Ok(segments) if segments.is_empty() => {
+                let _ = state.db.set_artifact_status(
+                    &id,
+                    "failed",
+                    "Transcription didn’t finish. The recording is saved — you can try again.",
+                );
+            }
             Ok(segments) => {
                 let transcript = segments
                     .iter()
                     .map(|s| s.text.as_str())
                     .collect::<Vec<_>>()
                     .join(" ");
-                let duration_ms = segments.iter().map(|s| s.end_ms).max().unwrap_or(0);
-                let json = serde_json::to_string(&segments).unwrap_or_else(|_| "[]".into());
-                let _ = state.db.set_artifact_transcript(
-                    &id,
-                    &transcript,
-                    &json,
-                    duration_ms,
-                    &crate::transcribe::whisper_model(),
-                );
+                if transcript.trim().is_empty() {
+                    let _ = state.db.set_artifact_status(
+                        &id,
+                        "failed",
+                        "Transcription didn’t finish. The recording is saved — you can try again.",
+                    );
+                } else {
+                    let duration_ms = segments.iter().map(|s| s.end_ms).max().unwrap_or(0);
+                    let json = serde_json::to_string(&segments).unwrap_or_else(|_| "[]".into());
+                    let _ = state.db.set_artifact_transcript(
+                        &id,
+                        &transcript,
+                        &json,
+                        duration_ms,
+                        &crate::transcribe::whisper_model(),
+                    );
+                }
             }
             Err(err) => {
                 let _ = state
@@ -236,6 +254,9 @@ fn human_fail_message(err: &anyhow::Error) -> String {
         || lower.contains("venv")
         || lower.contains("worker not found")
         || lower.contains("echo_python")
+        || lower.contains("team id")
+        || lower.contains("python shared library")
+        || lower.contains("bundled transcription worker")
     {
         return "Transcription isn’t available on this Mac. You can try again.".into();
     }

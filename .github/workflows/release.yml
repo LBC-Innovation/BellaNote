@@ -17,7 +17,7 @@ jobs:
         include:
           - runner: macos-latest
             rust-target: aarch64-apple-darwin
-            args: "--target aarch64-apple-darwin --bundles dmg"
+            args: "--target aarch64-apple-darwin --bundles app"
           - runner: windows-latest
             rust-target: x86_64-pc-windows-msvc
             args: "--target x86_64-pc-windows-msvc --bundles nsis"
@@ -64,12 +64,9 @@ jobs:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           if [ -z "$APPLE_CERTIFICATE" ]; then
-            echo "No Apple Developer certificate — building an unsigned .dmg."
+            echo "No Apple Developer certificate — building an unsigned .app."
             exit 0
           fi
           {
@@ -82,15 +79,6 @@ jobs:
             echo "EOF"
             echo "APPLE_SIGNING_IDENTITY<<EOF"
             echo "$APPLE_SIGNING_IDENTITY"
-            echo "EOF"
-            echo "APPLE_ID<<EOF"
-            echo "$APPLE_ID"
-            echo "EOF"
-            echo "APPLE_PASSWORD<<EOF"
-            echo "$APPLE_PASSWORD"
-            echo "EOF"
-            echo "APPLE_TEAM_ID<<EOF"
-            echo "$APPLE_TEAM_ID"
             echo "EOF"
           } >> "$GITHUB_ENV"
 
@@ -110,3 +98,17 @@ jobs:
           releaseDraft: true
           prerelease: true
           args: ${{ matrix.args }}
+
+      # Tauri signs the sidecar with the app entitlements. Re-sign the worker
+      # with disable-library-validation only, smoke-start it, then notarize a
+      # DMG built from that .app. Do not pass APPLE_ID into the Tauri step —
+      # that would notarize the worker before this fix.
+      - name: Re-sign sidecar, smoke, notarize DMG
+        if: startsWith(matrix.runner, 'macos')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash scripts/macos_release_finalize.sh ${{ matrix.rust-target }}
