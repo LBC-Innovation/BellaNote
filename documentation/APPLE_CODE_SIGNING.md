@@ -209,7 +209,7 @@ The macOS job **must not** notarize inside Tauri. Tauri signs the `.app` (and wo
 
 The main `bellanote` binary keeps [`entitlements.plist`](../src-tauri/entitlements.plist) (mic + screen capture). It must not gain `disable-library-validation`.
 
-1. **Actions → Release → Run workflow**, or push a tag `v` + that version (example: `v0.1.0-beta.3`).
+1. **Actions → Release → Run workflow**, or push a tag `v` + that version (example: `v0.1.0-beta.4`).
 2. The macOS job is Apple Silicon only (`macos-latest` / `aarch64-apple-darwin`). Intel Macs are not supported.
 3. Open **Export Apple signing secrets**. You want that step **not** to log `No Apple Developer certificate`. If it does, the `.app` is unsigned — see [`RUNNING_UNSIGNED_VERSIONS.md`](./RUNNING_UNSIGNED_VERSIONS.md). That step exports the certificate and signing identity only. It does **not** export `APPLE_ID` into the Tauri build (that would notarize before the sidecar is re-signed).
 4. Confirm **Re-sign sidecar, smoke, notarize DMG** passes. Failure with `different Team IDs` / `Failed to load Python` means the sidecar still cannot load Python.org’s framework.
