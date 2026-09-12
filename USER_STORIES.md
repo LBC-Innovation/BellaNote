@@ -491,7 +491,7 @@ Epic 3  Scoped chat
 - Each file is copied into Application Support (`library/{id}/source.{ext}`) and imported in sequence so extras queue.  
 - The artifact title defaults to the file stem (editable later); the original filename is shown as secondary text.  
 - Transcription starts automatically (`small.en` one-shot). If another job already holds the worker, later files stay **Pending**.  
-- Unsupported types and video (`mp4` / `mov` / etc.) are rejected with a readable reason.  
+- Unsupported types and non-MP4 video (`mov` / `mkv` / etc.) are rejected with a readable reason. Use **Import Meeting → Video files** for MP4.  
 - Adding the same path again creates a second artifact (no duplicate warning).
 
 ### Scenarios
@@ -519,11 +519,17 @@ Epic 3  Scoped chat
 - **Then** the file is not added  
 - **And** I see that BellaNote needs an audio file
 
-**Video file**
+**Video file on the audio path**
 
-- **Given** I pick `lecture.mp4`  
+- **Given** I try to add `lecture.mp4` through **Audio files**  
 - **When** I add it  
-- **Then** BellaNote rejects it and asks for an audio file
+- **Then** BellaNote rejects it and points me to **Import Meeting → Video files**
+
+**MP4 via Video files**
+
+- **Given** I open **Import Meeting → Video files** and choose `lecture.mp4`  
+- **When** BellaNote imports it  
+- **Then** the artifact appears with a **Video** chip, audio is extracted for playback/transcription, and **Watch** opens the stored video
 
 **Duplicate of the same file**
 
@@ -1389,7 +1395,7 @@ Epic 3  Scoped chat
 | D2 | Must every meeting group live under a topic? | **Yes** | Same tree. |
 | D3 | Duplicate names in the same parent | **Block org and topic (case-insensitive); allow meeting groups** | Groups are distinguished by date. |
 | D4 | Delete original files on disk? | **Optional, off by default** | Confirm dialog checkbox. BellaNote library copies of imports are still removed; recordings stay on disk unless the box is checked. |
-| D5 | Video (`mp4`) in this slice | **Reject, ask for audio** | Extract-audio can be next. |
+| D5 | Video (`mp4`) in this slice | **Import MP4 via Import Meeting → Video files** | Keeps `video.mp4`, extracts audio once (PyAV in sidecar), Watch opens a video window. Non-MP4 video still rejected. |
 | D6 | Undo after delete | **No undo; confirm instead** | Confirm always, including empty containers. |
 | D7 | Org-wide chat when there are dozens of transcripts | **Newest groups first, ~110k character budget, show omitted count** | Expandable file list is still open (US-305). |
 | D8 | Playback of source audio | **Shipped** | Waveform with click-to-seek; play, Follow, speed (1x–2x), and playhead/total clock on a row under the waveform. |

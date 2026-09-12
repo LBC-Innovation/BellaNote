@@ -3,6 +3,7 @@ import { ChatPanel } from "@/components/chat-panel";
 import { LibraryPanel } from "@/components/library-panel";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { Titlebar } from "@/components/titlebar";
+import { VideoPlayerWindow } from "@/components/video-player-window";
 import { WorkspacePanel } from "@/components/workspace-panel";
 import * as api from "@/lib/api";
 import { installArtifactListeners } from "@/store/useArtifactStore";
@@ -15,6 +16,13 @@ const PANE_MS = 420;
 const RAIL = 56;
 const LIBRARY_OPEN = 300;
 const GAP = 12;
+
+function videoWindowArtifactId() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("window") !== "video") return null;
+  const id = params.get("id")?.trim();
+  return id || null;
+}
 
 function usePersistedFlag(key: string) {
   const [value, setValue] = useState(() => {
@@ -130,6 +138,15 @@ function PaneShell({
 }
 
 export default function App() {
+  const videoArtifactId = videoWindowArtifactId();
+  if (videoArtifactId) {
+    return <VideoPlayerWindow artifactId={videoArtifactId} />;
+  }
+
+  return <MainApp />;
+}
+
+function MainApp() {
   const load = useLibraryStore((s) => s.load);
   const error = useLibraryStore((s) => s.error);
   const [settingsOpen, setSettingsOpen] = useState(false);

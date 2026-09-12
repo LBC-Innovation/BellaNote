@@ -236,7 +236,7 @@ Origin: **Brief** = founder request. **POC** = already proven. **Granola** = cat
 | C1 | Microphone recording | Capture a voice memo / in-person conversation from the device mic | MVP | P0 | Brief, POC | **Shipped** (`voice` via `cpal` on Mac and Windows). |
 | C2 | System + microphone capture | Capture meeting playback *and* the user’s voice, no bot | MVP | P0 | Brief, POC, Granola | **Shipped** on macOS (ScreenCaptureKit audio + `cpal` mic) and Windows (WASAPI loopback of the default playback device + `cpal` mic), shared mixer. |
 | C3 | YouTube URL ingest | User pastes a YouTube link; app fetches audio and transcribes locally | MVP | P0 | Brief | Personal-use helper. Must show ToS/copyright notice. Fail gracefully on restricted videos. |
-| C4 | Local audio file ingest | User picks wav/mp3/m4a/ogg/etc.; transcribe locally | MVP | P0 | Brief, Market | **First slice:** one file per picker; `small.en` one-shot; extra files queue as Pending. Video rejected. |
+| C4 | Local audio file ingest | User picks wav/mp3/m4a/ogg/etc.; transcribe locally | MVP | P0 | Brief, Market | **Shipped** multi-file Import Meeting → Audio. MP4 via **Video files** (extract audio + keep video for Watch). |
 | C5 | Import third-party transcript | Ingest VTT/SRT/TXT/DOCX from Teams, Zoom, Otter, etc.; audio optional | MVP | P0 | Brief, POC | **First slice:** `.vtt` / `.srt` / `.txt` only (2 MB cap). No DOCX. |
 | C6 | Re-transcribe | Re-run local model on kept audio (better model, or after edit) | Near-term | P1 | POC | POC already has regenerate. Keep it. |
 | C7 | Live transcript (ignorable) | Segments appear while recording; user is not required to watch | MVP | P0 | POC, Otter | **Shipped:** chunks update the artifact while capturing; Files shows Recording. |
@@ -330,7 +330,7 @@ New meeting ────────┼─ YouTube URL
 - System+mic must capture **what the user hears** and **what the user says**, mixed into one timeline, without a virtual cable product.
 - Permissions are explicit and recoverable: Microphone; on macOS also Screen Recording; on Windows the loopback/audio privacy prompt.
 - YouTube: paste URL → resolve title → download audio to the meeting folder → transcribe locally. Surface legal copy: intended for meetings/talks the user is entitled to use; BellaNote does not bypass private or age-gated content.
-- File ingest: common containers (wav, mp3, m4a, aac, ogg, flac, webm). Reject video-as-product; if a video file is dropped, extract audio only.
+- File ingest: common containers (wav, mp3, m4a, aac, ogg, flac, webm). MP4 via Import Meeting → Video files (keep video, extract audio once for transcript/playback).
 - Transcript import: VTT, SRT, plain text, and at least one Teams/Zoom export shape. Preserve timestamps when present. `has_audio = false`.
 - Stop recording is instant; trailing whisper chunks may still arrive (POC already handles this).
 - User can rename, retag, and run AI after any ingest path. AI features do not care how the transcript arrived.

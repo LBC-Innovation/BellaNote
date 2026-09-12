@@ -62,6 +62,10 @@ export function importAudio(meetingGroupId: string, path: string) {
   return invoke<Artifact>("import_audio", { args: { meetingGroupId, path } });
 }
 
+export function importVideo(meetingGroupId: string, path: string) {
+  return invoke<Artifact>("import_video", { args: { meetingGroupId, path } });
+}
+
 export function importTranscript(meetingGroupId: string, path: string) {
   return invoke<Artifact>("import_transcript", { args: { meetingGroupId, path } });
 }
@@ -82,8 +86,16 @@ export function exportArtifactAudio(id: string, destPath: string) {
   return invoke<void>("export_artifact_audio", { args: { id, destPath } });
 }
 
+export function exportArtifactTranscript(id: string, destPath: string) {
+  return invoke<void>("export_artifact_transcript", { args: { id, destPath } });
+}
+
 export function getArtifactAudioPath(id: string) {
   return invoke<string | null>("get_artifact_audio_path", { args: { id } });
+}
+
+export function getArtifactVideoPath(id: string) {
+  return invoke<string | null>("get_artifact_video_path", { args: { id } });
 }
 
 export type AudioPeaks = {

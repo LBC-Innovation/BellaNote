@@ -192,13 +192,9 @@ impl Transcriber {
         })
     }
 
-    pub fn transcribe_path(&self, path: &Path) -> Result<Vec<TranscriptSegment>> {
-        let path_str = path
-            .to_str()
-            .with_context(|| format!("path must be UTF-8: {path:?}"))?;
+    fn request_json(&self, req: serde_json::Value) -> Result<serde_json::Value> {
         let line_out = {
             let mut g = self.inner.lock().expect("transcribe mutex poisoned");
-            let req = serde_json::json!({ "wav_path": path_str });
             writeln!(g.stdin, "{req}")?;
             g.stdin.flush()?;
             let mut line = String::new();
@@ -207,13 +203,43 @@ impl Transcriber {
                 .context("read worker response")?;
             line
         };
-
         let v: serde_json::Value = serde_json::from_str(line_out.trim())
             .with_context(|| format!("bad JSON: {line_out:?}"))?;
         if let Some(err) = v.get("error") {
             let detail = v.get("detail").unwrap_or(err);
             anyhow::bail!("faster-whisper: {err} — {detail}");
         }
+        Ok(v)
+    }
+
+    /// Extract an audio track from a video file via the sidecar (PyAV).
+    /// Prefer `.m4a` (stream copy); use `.wav` when re-encode is required.
+    pub fn extract_audio(&self, video_path: &Path, out_path: &Path) -> Result<()> {
+        let video_str = video_path
+            .to_str()
+            .with_context(|| format!("path must be UTF-8: {video_path:?}"))?;
+        let out_str = out_path
+            .to_str()
+            .with_context(|| format!("path must be UTF-8: {out_path:?}"))?;
+        let v = self.request_json(serde_json::json!({
+            "cmd": "extract_audio",
+            "video_path": video_str,
+            "out_path": out_str,
+        }))?;
+        if v.get("ok").and_then(|x| x.as_bool()) != Some(true) {
+            anyhow::bail!("extract_audio: unexpected worker response: {v}");
+        }
+        if !out_path.is_file() {
+            anyhow::bail!("extract_audio: output missing at {out_path:?}");
+        }
+        Ok(())
+    }
+
+    pub fn transcribe_path(&self, path: &Path) -> Result<Vec<TranscriptSegment>> {
+        let path_str = path
+            .to_str()
+            .with_context(|| format!("path must be UTF-8: {path:?}"))?;
+        let v = self.request_json(serde_json::json!({ "wav_path": path_str }))?;
 
         let segments: Vec<TranscriptSegment> =
             serde_json::from_value(v.get("segments").cloned().unwrap_or(serde_json::json!([])))

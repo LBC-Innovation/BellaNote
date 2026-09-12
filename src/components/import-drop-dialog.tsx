@@ -3,7 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
-import { FileAudio, FileText, Loader2 } from "lucide-react";
+import { FileAudio, FileText, FileVideo, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -17,9 +17,10 @@ import { errorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 
 const AUDIO_EXTS = ["wav", "mp3", "m4a", "aac", "ogg", "flac"];
+const VIDEO_EXTS = ["mp4"];
 const TRANSCRIPT_EXTS = ["vtt", "srt", "txt"];
 
-type ImportKind = "audio" | "transcript";
+export type ImportKind = "audio" | "video" | "transcript";
 
 function extensionOf(path: string) {
   const name = path.split("/").pop() ?? path;
@@ -32,6 +33,28 @@ function pathsFromDataTransfer(transfer: DataTransfer | null) {
   return Array.from(transfer.files)
     .map((file) => (file as File & { path?: string }).path)
     .filter((path): path is string => Boolean(path));
+}
+
+function allowedExts(kind: ImportKind) {
+  if (kind === "audio") return AUDIO_EXTS;
+  if (kind === "video") return VIDEO_EXTS;
+  return TRANSCRIPT_EXTS;
+}
+
+function rejectMessage(kind: ImportKind, plural: boolean) {
+  if (kind === "audio") {
+    return plural
+      ? "Some files were skipped. Use wav, mp3, m4a, aac, ogg, or flac."
+      : "BellaNote needs audio files (wav, mp3, m4a, aac, ogg, or flac).";
+  }
+  if (kind === "video") {
+    return plural
+      ? "Some files were skipped. Use MP4 video files."
+      : "BellaNote needs MP4 video files.";
+  }
+  return plural
+    ? "Some files were skipped. Use .vtt, .srt, or .txt."
+    : "Import a .vtt, .srt, or .txt transcript.";
 }
 
 export function ImportDropDialog({
@@ -66,23 +89,15 @@ export function ImportDropDialog({
     const currentKind = kindRef.current;
     if (!currentKind || busyRef.current || paths.length === 0) return;
     busyRef.current = true;
-    const allowed = currentKind === "audio" ? AUDIO_EXTS : TRANSCRIPT_EXTS;
+    const allowed = allowedExts(currentKind);
     const accepted = paths.filter((path) => allowed.includes(extensionOf(path)));
     if (accepted.length === 0) {
       busyRef.current = false;
-      toast.error(
-        currentKind === "audio"
-          ? "BellaNote needs audio files (wav, mp3, m4a, aac, ogg, or flac)."
-          : "Import a .vtt, .srt, or .txt transcript.",
-      );
+      toast.error(rejectMessage(currentKind, false));
       return;
     }
     if (accepted.length < paths.length) {
-      toast.error(
-        currentKind === "audio"
-          ? "Some files were skipped. Use wav, mp3, m4a, aac, ogg, or flac."
-          : "Some files were skipped. Use .vtt, .srt, or .txt.",
-      );
+      toast.error(rejectMessage(currentKind, true));
     }
 
     setBusy(true);
@@ -92,6 +107,7 @@ export function ImportDropDialog({
       for (const path of accepted) {
         try {
           if (currentKind === "audio") await api.importAudio(groupIdRef.current, path);
+          else if (currentKind === "video") await api.importVideo(groupIdRef.current, path);
           else await api.importTranscript(groupIdRef.current, path);
           added += 1;
         } catch (err) {
@@ -154,12 +170,15 @@ export function ImportDropDialog({
   async function pickFiles() {
     if (!kind || busyRef.current) return;
     try {
+      const filter =
+        kind === "audio"
+          ? [{ name: "Audio", extensions: AUDIO_EXTS }]
+          : kind === "video"
+            ? [{ name: "Video", extensions: VIDEO_EXTS }]
+            : [{ name: "Transcript", extensions: TRANSCRIPT_EXTS }];
       const selected = await openFileDialog({
         multiple: true,
-        filters:
-          kind === "audio"
-            ? [{ name: "Audio", extensions: AUDIO_EXTS }]
-            : [{ name: "Transcript", extensions: TRANSCRIPT_EXTS }],
+        filters: filter,
       });
       if (!selected) return;
       await importPaths(Array.isArray(selected) ? selected : [selected]);
@@ -168,7 +187,20 @@ export function ImportDropDialog({
     }
   }
 
-  const audio = kind === "audio";
+  const title =
+    kind === "audio" ? "Import audio" : kind === "video" ? "Import video" : "Import transcript";
+  const description =
+    kind === "audio"
+      ? "Drop one or more recordings, or click to choose them."
+      : kind === "video"
+        ? "Drop one or more MP4 videos, or click to choose them."
+        : "Drop one or more .vtt, .srt, or .txt files, or click to choose them.";
+  const extHint =
+    kind === "audio"
+      ? AUDIO_EXTS.join(", ")
+      : kind === "video"
+        ? VIDEO_EXTS.map((ext) => `.${ext}`).join(", ")
+        : TRANSCRIPT_EXTS.map((ext) => `.${ext}`).join(", ");
 
   return (
     <Dialog
@@ -179,12 +211,8 @@ export function ImportDropDialog({
     >
       <DialogContent className="glass-panel sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{audio ? "Import audio" : "Import transcript"}</DialogTitle>
-          <DialogDescription>
-            {audio
-              ? "Drop one or more recordings, or click to choose them."
-              : "Drop one or more .vtt, .srt, or .txt files, or click to choose them."}
-          </DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
         <button
@@ -220,16 +248,16 @@ export function ImportDropDialog({
             </>
           ) : (
             <>
-              {audio ? (
+              {kind === "audio" ? (
                 <FileAudio className="size-8 text-primary" />
+              ) : kind === "video" ? (
+                <FileVideo className="size-8 text-primary" />
               ) : (
                 <FileText className="size-8 text-primary" />
               )}
               <div>
                 <p className="text-sm font-medium">Drop files here or click to browse</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {audio ? AUDIO_EXTS.join(", ") : TRANSCRIPT_EXTS.map((ext) => `.${ext}`).join(", ")}
-                </p>
+                <p className="mt-1 text-xs text-muted-foreground">{extHint}</p>
               </div>
             </>
           )}

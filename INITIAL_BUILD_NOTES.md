@@ -209,5 +209,5 @@ These were not asked as interview questions; they are the defaults we will use u
 - Meeting group names may repeat if `occurred_at` differs.  
 - Chat threads persist locally per scope.  
 - Delete is confirm-only (no undo toast in this POC).  
-- Video (`mp4`) is rejected; ask for audio.  
+- Video (`mp4`) imports via **Import Meeting → Video files**; other video containers are rejected.  
 - UI kit is shadcn/ui + Tailwind, charcoal + mint glass.

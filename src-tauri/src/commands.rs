@@ -159,6 +159,15 @@ pub fn import_audio(
 }
 
 #[tauri::command]
+pub fn import_video(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+    args: ImportFileArgs,
+) -> AppResult<Artifact> {
+    artifacts::import_video(&app, &state, &args.meeting_group_id, &args.path)
+}
+
+#[tauri::command]
 pub fn import_transcript(
     app: AppHandle,
     state: State<'_, Arc<AppState>>,
@@ -198,6 +207,11 @@ pub fn get_artifact_audio_path(app: AppHandle, args: IdArgs) -> AppResult<Option
 }
 
 #[tauri::command]
+pub fn get_artifact_video_path(app: AppHandle, args: IdArgs) -> AppResult<Option<String>> {
+    Ok(artifacts::find_video_path(&app, &args.id).map(|p| p.to_string_lossy().into_owned()))
+}
+
+#[tauri::command]
 pub async fn get_artifact_audio_peaks(app: AppHandle, args: IdArgs) -> AppResult<AudioPeaksResult> {
     let path = artifacts::find_audio_path(&app, &args.id).ok_or_else(|| {
         crate::error::AppError::Message("The original audio is missing.".into())
@@ -231,6 +245,21 @@ pub struct ExportArtifactAudioArgs {
 #[tauri::command]
 pub fn export_artifact_audio(app: AppHandle, args: ExportArtifactAudioArgs) -> AppResult<()> {
     artifacts::export_artifact_audio(&app, &args.id, &args.dest_path)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportArtifactTranscriptArgs {
+    pub id: String,
+    pub dest_path: String,
+}
+
+#[tauri::command]
+pub fn export_artifact_transcript(
+    state: State<'_, Arc<AppState>>,
+    args: ExportArtifactTranscriptArgs,
+) -> AppResult<()> {
+    artifacts::export_artifact_transcript(&state, &args.id, &args.dest_path)
 }
 
 #[derive(Deserialize)]
