@@ -37,6 +37,7 @@ The Duke walkthrough is the north star for this slice: organize class material u
 | Record system + mic on macOS and Windows        | Move a file between meeting groups    |
 | Import one or more audio files or transcripts   |                                       |
 | Play audio, follow the transcript, search lines |                                       |
+| Export saved audio to a folder you choose       |                                       |
 | Chat at org / topic / group / file scope        |                                       |
 | Keep the OpenAI token in the OS credential store |                                       |
 
@@ -113,7 +114,7 @@ Three glass panes: **Library | Transcript | Chat**. Each can collapse to a label
 3. Inside it, create a **topic** (`Competitive Strategies`).
 4. Inside the topic, create a **meeting group** (`Lecture Class 1`).
 
-You cannot add files until that path exists. Rename and delete live on each row’s overflow menu. Delete always asks for confirmation. A checkbox in that dialog can also delete the original audio file; leave it unchecked to keep the file on disk.
+You cannot add files until that path exists. Rename and delete live on each row’s overflow menu. Delete always asks for confirmation. Imported files never delete your original on disk—only BellaNote’s copy. For recordings, an optional checkbox can also remove BellaNote’s stored audio.
 
 **Collapse all** folds every org and topic in the library. Click a row (not the menu) to expand or collapse that branch.
 
@@ -130,7 +131,7 @@ One recording at a time. Stop is instant; trailing transcript chunks may still a
 
 Do not click an **Importing** row expecting the transcript; a toast asks you to wait. **Failed** rows have **Retry**.
 
-The Files card lists title + original filename, date added, and quality. Pencil renames the title; trash deletes with confirm. **Select multiple** appears only while Files is expanded.
+The Files card lists title + original filename, date added, and quality. Download exports the audio; pencil renames the title; trash deletes with confirm. **Select multiple** appears only while Files is expanded.
 
 ### 3. Read and play
 
@@ -139,7 +140,8 @@ Open a **Ready** (or Failed) row. The Transcript card shows **Audio** and/or **T
 On audio:
 
 - The waveform is the full meeting on one strip. Click or drag to seek.
-- Under the waveform: **play / pause**, **Follow**, speed (**1x / 1.25x / 1.5x / 2x**), and playhead / total time.
+- Under the waveform: **play / pause**, **Follow**, speed (**1x / 1.25x / 1.5x / 2x**), **Export**, and playhead / total time.
+- **Export** copies BellaNote’s library audio to a folder you choose; the library file stays put.
 - Follow highlights and scrolls the current transcript line. Turn it off to read without the list jumping.
 - Speed is remembered across files.
 

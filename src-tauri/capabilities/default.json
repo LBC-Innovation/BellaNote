@@ -27,6 +27,7 @@
     "allow-rename-artifact",
     "allow-delete-artifact",
     "allow-retry-artifact",
+    "allow-export-artifact-audio",
     "allow-get-artifact-audio-path",
     "allow-get-artifact-audio-peaks",
     "allow-list-artifact-comments",

@@ -164,23 +164,6 @@ pub fn delete_artifact_files(app: &AppHandle, id: &str) {
     }
 }
 
-/// Deletes the user's original import, never anything inside BellaNote's library.
-pub fn delete_original_source(library: &Path, original: &str) {
-    if original.is_empty() {
-        return;
-    }
-    let path = Path::new(original);
-    if !path.is_file() {
-        return;
-    }
-    if let (Ok(file), Ok(lib)) = (path.canonicalize(), library.canonicalize()) {
-        if file.starts_with(&lib) {
-            return;
-        }
-    }
-    let _ = std::fs::remove_file(path);
-}
-
 pub fn find_audio_path(app: &AppHandle, id: &str) -> Option<PathBuf> {
     let dir = paths::artifact_dir(app, id).ok()?;
     std::fs::read_dir(dir).ok()?.flatten().map(|e| e.path()).find(|p| {
@@ -189,6 +172,33 @@ pub fn find_audio_path(app: &AppHandle, id: &str) -> Option<PathBuf> {
             .is_some_and(|n| n.starts_with("source."))
             && AUDIO_EXTS.contains(&ext_of(p).as_str())
     })
+}
+
+/// Copy BellaNote's library audio to a user-chosen path. Never deletes or moves the library file.
+pub fn export_artifact_audio(app: &AppHandle, id: &str, dest: &str) -> AppResult<()> {
+    let source = find_audio_path(app, id).ok_or_else(|| {
+        AppError::Message("This file has no audio to export.".into())
+    })?;
+    let dest_path = PathBuf::from(dest);
+    if dest_path.as_os_str().is_empty() {
+        return Err(AppError::Message("Choose where to save the audio.".into()));
+    }
+    if let Ok(src) = source.canonicalize() {
+        if let Ok(dst) = dest_path.canonicalize() {
+            if src == dst {
+                return Ok(());
+            }
+        }
+    }
+    if let Some(parent) = dest_path.parent() {
+        if !parent.as_os_str().is_empty() && !parent.is_dir() {
+            return Err(AppError::Message("That folder doesn’t exist.".into()));
+        }
+    }
+    std::fs::copy(&source, &dest_path).map_err(|e| {
+        AppError::Message(format!("Could not export the audio file: {e}"))
+    })?;
+    Ok(())
 }
 
 pub(crate) fn spawn_transcribe(app: AppHandle, state: Arc<AppState>, id: String, audio_path: PathBuf) {

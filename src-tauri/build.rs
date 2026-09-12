@@ -58,6 +58,7 @@ fn main() {
             "rename_artifact",
             "delete_artifact",
             "retry_artifact",
+            "export_artifact_audio",
             "get_artifact_audio_path",
             "get_artifact_audio_peaks",
             "list_artifact_comments",
