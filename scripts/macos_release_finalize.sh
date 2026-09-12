@@ -17,6 +17,8 @@ if [[ ${#apps[@]} -eq 0 ]]; then
 fi
 app="${apps[0]}"
 
+# Tauri's temporary signing keychain is gone by now; re-import before codesign.
+bash "$root/scripts/macos_import_signing_cert.sh"
 bash "$root/scripts/macos_resign_sidecar.sh" "$app"
 bash "$root/scripts/smoke_transcribe_worker.sh" "$app"
 

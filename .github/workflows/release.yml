@@ -103,10 +103,15 @@ jobs:
       # with disable-library-validation only, smoke-start it, then notarize a
       # DMG built from that .app. Do not pass APPLE_ID into the Tauri step —
       # that would notarize the worker before this fix.
+      # Re-import the .p12: Tauri deletes its ephemeral keychain when the
+      # build step ends, so codesign in macos_resign_sidecar.sh would otherwise
+      # fail with "no identity found".
       - name: Re-sign sidecar, smoke, notarize DMG
         if: startsWith(matrix.runner, 'macos')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}

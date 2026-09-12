@@ -23,7 +23,7 @@ Official references: [Apple Developer Program](https://developer.apple.com/progr
 
 Do **not** create empty placeholders. Tauri treats a present `APPLE_CERTIFICATE` as “import this .p12,” even when the value is `""`. GitHub Actions turns a missing secret into an empty string. The workflow only exports `APPLE_*` when `APPLE_CERTIFICATE` is actually set.
 
-Do **not** add a `KEYCHAIN_PASSWORD` secret. This repo’s workflow does not use it.
+Do **not** add a `KEYCHAIN_PASSWORD` secret. The workflow uses a local throwaway password only when `macos_import_signing_cert.sh` creates a job-scoped keychain after Tauri finishes (Tauri’s own keychain is deleted when `tauri-action` exits).
 
 ---
 
