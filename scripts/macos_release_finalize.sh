@@ -26,8 +26,7 @@ volname="$(python3 -c "import json; print(json.load(open('$root/src-tauri/tauri.
 dmg="$dmg_dir/${volname}_${version}_aarch64.dmg"
 mkdir -p "$dmg_dir"
 
-# DMG creation needs ~2x the .app size free (staging copy + compressed image).
-# Drop compile intermediates and caches that are no longer needed after signing.
+# Host disk is usually fine; reclaim still drops large intermediates we no longer need.
 echo "Disk before reclaim:"
 df -h "$root" "$TMPDIR" 2>/dev/null || df -h
 release_dir="$root/src-tauri/target/$target/release"
@@ -49,15 +48,46 @@ rm -rf \
 echo "Disk after reclaim:"
 df -h "$root" "$TMPDIR" 2>/dev/null || df -h
 
-staging="$(mktemp -d)"
-trap 'rm -rf "$staging"' EXIT
-cp -R "$app" "$staging/"
-ln -s /Applications "$staging/Applications"
-rm -f "$dmg"
-hdiutil create -volname "$volname" -srcfolder "$staging" -ov -format UDZO "$dmg"
-# Staging is only needed until the DMG exists.
-rm -rf "$staging"
+# hdiutil's default -srcfolder auto-size often undersizes a large .app (Whisper
+# sidecar). That fails as "No space left on device" on /Volumes/$volname even
+# when the host still has tens of GB free. Create an explicitly sized RW image,
+# copy with ditto, then convert to compressed UDZO.
+if [[ -d "/Volumes/$volname" ]]; then
+  hdiutil detach "/Volumes/$volname" -force || true
+fi
+
+app_kb="$(du -sk "$app" | awk '{print $1}')"
+# 30% headroom + 64MB for HFS+ overhead / catalog.
+size_kb="$((app_kb * 13 / 10 + 64 * 1024))"
+rw_dmg="${TMPDIR:-/tmp}/bellanote-rw-$$.dmg"
+rm -f "$rw_dmg" "$dmg"
+
+echo "Creating DMG: app=$(du -sh "$app" | awk '{print $1}') rw_image=$((size_kb / 1024))m"
+hdiutil create -ov -size "${size_kb}k" -fs HFS+ -volname "$volname" "$rw_dmg"
+attach_out="$(hdiutil attach -readwrite -noverify -noautoopen "$rw_dmg")"
+echo "$attach_out"
+device="$(echo "$attach_out" | awk '/^\/dev\// {dev=$1} END {print dev}')"
+volume="/Volumes/$volname"
+if [[ -z "$device" || ! -d "$volume" ]]; then
+  echo "Failed to mount $rw_dmg" >&2
+  exit 1
+fi
+
+cleanup_dmg() {
+  hdiutil detach "$device" -force 2>/dev/null || true
+  rm -f "$rw_dmg"
+}
+trap cleanup_dmg EXIT
+
+ditto "$app" "$volume/$(basename "$app")"
+ln -s /Applications "$volume/Applications"
+sync
+hdiutil detach "$device"
+device=""
 trap - EXIT
+
+hdiutil convert "$rw_dmg" -format UDZO -imagekey zlib-level=9 -o "$dmg"
+rm -f "$rw_dmg"
 
 
 if [[ -z "${APPLE_ID:-}" || -z "${APPLE_PASSWORD:-}" || -z "${APPLE_TEAM_ID:-}" || -z "${APPLE_SIGNING_IDENTITY:-}" || "${APPLE_SIGNING_IDENTITY}" == "-" ]]; then
