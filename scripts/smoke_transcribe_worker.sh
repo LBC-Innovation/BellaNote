@@ -20,7 +20,11 @@ trap 'rm -rf "$tmp"' EXIT
 out="$tmp/stdout.txt"
 err="$tmp/stderr.txt"
 download_root="$tmp/whisper-models"
-mkdir -p "$download_root"
+# Keep Hub caches inside tmp so a partial model download does not fill the runner home.
+export HF_HOME="$tmp/hf"
+export HUGGINGFACE_HUB_CACHE="$tmp/hf/hub"
+export TRANSFORMERS_CACHE="$tmp/hf/transformers"
+mkdir -p "$download_root" "$HUGGINGFACE_HUB_CACHE" "$TRANSFORMERS_CACHE"
 touch "$out" "$err"
 
 set +e

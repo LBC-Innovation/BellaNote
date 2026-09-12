@@ -17,7 +17,6 @@ if [[ ${#apps[@]} -eq 0 ]]; then
 fi
 app="${apps[0]}"
 
-# Tauri's temporary signing keychain is gone by now; re-import before codesign.
 bash "$root/scripts/macos_import_signing_cert.sh"
 bash "$root/scripts/macos_resign_sidecar.sh" "$app"
 bash "$root/scripts/smoke_transcribe_worker.sh" "$app"
@@ -27,12 +26,39 @@ volname="$(python3 -c "import json; print(json.load(open('$root/src-tauri/tauri.
 dmg="$dmg_dir/${volname}_${version}_aarch64.dmg"
 mkdir -p "$dmg_dir"
 
+# DMG creation needs ~2x the .app size free (staging copy + compressed image).
+# Drop compile intermediates and caches that are no longer needed after signing.
+echo "Disk before reclaim:"
+df -h "$root" "$TMPDIR" 2>/dev/null || df -h
+release_dir="$root/src-tauri/target/$target/release"
+rm -rf \
+  "$release_dir/deps" \
+  "$release_dir/build" \
+  "$release_dir/incremental" \
+  "$release_dir/.fingerprint" \
+  "$release_dir/bellanote" \
+  "$release_dir/bellanote.d" \
+  "$macos_dir"/*.app.tar.gz \
+  "$root/src-tauri/.cache" \
+  "$root/src-tauri/binaries" \
+  "$root/node_modules" \
+  "${HOME}/.cache/huggingface" \
+  "${HOME}/Library/Caches/huggingface" \
+  "${CARGO_HOME:-$HOME/.cargo}/registry/src" \
+  "${CARGO_HOME:-$HOME/.cargo}/git/checkouts"
+echo "Disk after reclaim:"
+df -h "$root" "$TMPDIR" 2>/dev/null || df -h
+
 staging="$(mktemp -d)"
 trap 'rm -rf "$staging"' EXIT
 cp -R "$app" "$staging/"
 ln -s /Applications "$staging/Applications"
 rm -f "$dmg"
 hdiutil create -volname "$volname" -srcfolder "$staging" -ov -format UDZO "$dmg"
+# Staging is only needed until the DMG exists.
+rm -rf "$staging"
+trap - EXIT
+
 
 if [[ -z "${APPLE_ID:-}" || -z "${APPLE_PASSWORD:-}" || -z "${APPLE_TEAM_ID:-}" || -z "${APPLE_SIGNING_IDENTITY:-}" || "${APPLE_SIGNING_IDENTITY}" == "-" ]]; then
   echo "Apple notarization skipped (missing identity or notary secrets); DMG at $dmg"
