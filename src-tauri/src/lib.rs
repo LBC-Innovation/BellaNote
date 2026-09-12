@@ -65,6 +65,7 @@ pub fn run() {
             commands::rename_artifact,
             commands::delete_artifact,
             commands::retry_artifact,
+            commands::export_artifact_audio,
             commands::get_artifact_audio_path,
             commands::get_artifact_audio_peaks,
             commands::list_artifact_comments,

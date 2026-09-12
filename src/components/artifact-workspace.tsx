@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Check, ChevronDown, ChevronLeft, FileAudio, FileText, FileUp, Link2, Link2Off, ListChecks, Loader2, MessageSquarePlus, Mic, MonitorSpeaker, Pause, Pencil, Play, Plus, RotateCcw, Search, Square, Trash2, X } from "lucide-react";
+import { save as saveFileDialog } from "@tauri-apps/plugin-dialog";
+import { Check, ChevronDown, ChevronLeft, Download, FileAudio, FileText, FileUp, Link2, Link2Off, ListChecks, Loader2, MessageSquarePlus, Mic, MonitorSpeaker, Pause, Pencil, Play, Plus, RotateCcw, Search, Square, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ImportDropDialog } from "@/components/import-drop-dialog";
@@ -31,6 +32,44 @@ import type { Artifact, ArtifactComment } from "@/lib/types";
 
 function hasTranscriptContent(artifact: Artifact) {
   return artifact.status === "ready" && Boolean(artifact.transcript.trim());
+}
+
+function extensionOfPath(path: string) {
+  const name = path.split(/[/\\]/).pop() ?? path;
+  const dot = name.lastIndexOf(".");
+  return dot >= 0 ? name.slice(dot + 1).toLowerCase() : "";
+}
+
+function suggestedExportFileName(artifact: Artifact, ext: string) {
+  const original = artifact.originalFilename?.trim();
+  if (original) {
+    const base = original.split(/[/\\]/).pop() ?? original;
+    if (base.toLowerCase().endsWith(`.${ext}`)) return base;
+    return `${base}.${ext}`;
+  }
+  const title = artifact.title.trim() || "recording";
+  const safe = title.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").replace(/\s+/g, " ").trim();
+  return `${safe || "recording"}.${ext}`;
+}
+
+async function exportArtifactAudioFile(artifact: Artifact) {
+  if (!artifact.hasAudio) {
+    toast.error("This file has no audio to export.");
+    return;
+  }
+  const source = await api.getArtifactAudioPath(artifact.id);
+  if (!source) {
+    toast.error("The audio file is missing.");
+    return;
+  }
+  const ext = extensionOfPath(source) || "wav";
+  const dest = await saveFileDialog({
+    defaultPath: suggestedExportFileName(artifact, ext),
+    filters: [{ name: "Audio", extensions: [ext] }],
+  });
+  if (!dest) return;
+  await api.exportArtifactAudio(artifact.id, dest);
+  toast.success("Audio exported");
 }
 
 function ArtifactKindChips({ artifact }: { artifact: Artifact }) {
@@ -577,20 +616,19 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
         title={remove ? `Remove ${remove.title}?` : "Remove"}
         description="This removes the file from BellaNote."
         extraOption={
-          remove?.hasAudio
-            ? remove.originalPath
-              ? `Also delete the original audio file (${remove.originalFilename})`
-              : "Also delete the audio file from this computer"
+          remove?.hasAudio &&
+          (remove.sourceType === "voice" || remove.sourceType === "system")
+            ? "Also delete BellaNote’s copy of the audio"
             : undefined
         }
         confirmLabel="Remove"
         onOpenChange={(open) => {
           if (!open) setRemove(null);
         }}
-        onConfirm={async (deleteOriginal) => {
+        onConfirm={async (deleteAudio) => {
           if (!remove) return;
           if (activeId === remove.id) setActive(null);
-          await api.deleteArtifact(remove.id, deleteOriginal);
+          await api.deleteArtifact(remove.id, deleteAudio);
           forgetWaveformPeaks(remove.id);
           await load(groupId);
         }}
@@ -601,18 +639,23 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
         title={`Are you sure you want to delete ${selectedIds.length} ${selectedIds.length === 1 ? "file" : "files"}?`}
         description="This removes the files from BellaNote."
         extraOption={
-          artifacts.some((item) => selectedIds.includes(item.id) && item.hasAudio)
-            ? "Also delete the original audio files from this computer"
+          artifacts.some(
+            (item) =>
+              selectedIds.includes(item.id) &&
+              item.hasAudio &&
+              (item.sourceType === "voice" || item.sourceType === "system"),
+          )
+            ? "Also delete BellaNote’s copies of the audio"
             : undefined
         }
         confirmLabel="Delete"
         onOpenChange={setRemoveMany}
-        onConfirm={async (deleteOriginal) => {
+        onConfirm={async (deleteAudio) => {
           const ids = selectedIds;
           try {
             if (activeId && ids.includes(activeId)) setActive(null);
             for (const id of ids) {
-              await api.deleteArtifact(id, deleteOriginal);
+              await api.deleteArtifact(id, deleteAudio);
               forgetWaveformPeaks(id);
             }
             setSelectedIds([]);
@@ -707,7 +750,7 @@ function FilesTable({
           <span>File</span>
           <span className="w-[7.25rem]">Added</span>
           <span className="w-[10rem]">Quality</span>
-          <span className="w-14" />
+          <span className="w-[4.75rem]" />
         </div>
         {artifacts.map((item) => (
           <FileRow
@@ -734,6 +777,13 @@ function FilesTable({
               }, 900);
             }}
             onRetry={() => onRetry(item.id)}
+            onExport={async () => {
+              try {
+                await exportArtifactAudioFile(item);
+              } catch (err) {
+                toast.error(errorMessage(err));
+              }
+            }}
             onDelete={() => onDelete(item)}
             onImportingClick={onImportingClick}
           />
@@ -756,6 +806,7 @@ function FileRow({
   onCancelEdit,
   onSave,
   onRetry,
+  onExport,
   onDelete,
   onImportingClick,
 }: {
@@ -771,6 +822,7 @@ function FileRow({
   onCancelEdit: () => void;
   onSave: (name: string) => Promise<void>;
   onRetry: () => Promise<void>;
+  onExport: () => Promise<void>;
   onDelete: () => void;
   onImportingClick: () => void;
 }) {
@@ -780,6 +832,7 @@ function FileRow({
   const failed = isFailedArtifact(item);
   const blocked = !isLoadableArtifact(item);
   const [retrying, setRetrying] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [draft, setDraft] = useState(item.title);
   const saving = useRef(false);
   const ignoreBlur = useRef(false);
@@ -919,7 +972,7 @@ function FileRow({
         ) : null}
       </span>
       {selecting ? (
-        <span className="flex w-14 items-center justify-end">
+        <span className="flex w-[4.75rem] items-center justify-end">
           <FileCheckbox
             checked={checked}
             label={`Select ${item.title}`}
@@ -928,9 +981,24 @@ function FileRow({
         </span>
       ) : (
         <span
-          className="flex w-14 justify-end gap-0.5"
+          className="flex w-[4.75rem] justify-end gap-0.5"
           onClick={(event) => event.stopPropagation()}
         >
+          {item.hasAudio && !recording ? (
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              disabled={exporting}
+              aria-label={`Export ${item.title}`}
+              onClick={() => {
+                if (exporting) return;
+                setExporting(true);
+                void onExport().finally(() => setExporting(false));
+              }}
+            >
+              {exporting ? <Loader2 className="animate-spin" /> : <Download />}
+            </Button>
+          ) : null}
           <Button
             size="icon-xs"
             variant="ghost"
@@ -1014,9 +1082,12 @@ function PlaybackToolbar({
   playbackRate,
   currentTimeMs,
   durationMs,
+  canExport,
+  exporting,
   onTogglePlay,
   onToggleFollow,
   onPlaybackRateChange,
+  onExport,
 }: {
   disabled: boolean;
   playing: boolean;
@@ -1024,9 +1095,12 @@ function PlaybackToolbar({
   playbackRate: PlaybackRate;
   currentTimeMs: number;
   durationMs: number;
+  canExport: boolean;
+  exporting: boolean;
   onTogglePlay: () => void;
   onToggleFollow: () => void;
   onPlaybackRateChange: (rate: PlaybackRate) => void;
+  onExport: () => void;
 }) {
   return (
     <div className="mt-2 flex items-center gap-1.5">
@@ -1076,6 +1150,18 @@ function PlaybackToolbar({
           </DropdownMenuRadioGroup>
         </DropdownMenuContent>
       </DropdownMenu>
+      {canExport ? (
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={exporting}
+          aria-label="Export audio"
+          onClick={onExport}
+        >
+          {exporting ? <Loader2 className="animate-spin" /> : <Download />}
+          Export
+        </Button>
+      ) : null}
       <p className="ml-auto shrink-0 whitespace-nowrap font-mono text-[11px] tabular-nums">
         {formatTimestamp(currentTimeMs)}
         <span className="text-muted-foreground"> / {formatTimestamp(durationMs)}</span>
@@ -1272,6 +1358,7 @@ function ArtifactDetail({
   const [playbackRate, setPlaybackRate] = useState<PlaybackRate>(readPlaybackRate);
   const [audioDurationMs, setAudioDurationMs] = useState(artifact.durationMs);
   const [transcriptQuery, setTranscriptQuery] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   const activeIndex = useMemo(
     () => activeSegmentIndex(segments, currentTimeMs),
@@ -1474,6 +1561,8 @@ function ArtifactDetail({
             playbackRate={playbackRate}
             currentTimeMs={currentTimeMs}
             durationMs={audioDurationMs || artifact.durationMs}
+            canExport={artifact.hasAudio && !isRecordingArtifact(artifact)}
+            exporting={exporting}
             onTogglePlay={() => {
               const audio = audioRef.current;
               if (!audio) return;
@@ -1482,6 +1571,13 @@ function ArtifactDetail({
             }}
             onToggleFollow={() => setFollowPlayback((value) => !value)}
             onPlaybackRateChange={changePlaybackRate}
+            onExport={() => {
+              if (exporting) return;
+              setExporting(true);
+              void exportArtifactAudioFile(artifact)
+                .catch((err) => toast.error(errorMessage(err)))
+                .finally(() => setExporting(false));
+            }}
           />
         </div>
       ) : (

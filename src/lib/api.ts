@@ -70,12 +70,16 @@ export function renameArtifact(id: string, name: string) {
   return invoke<Artifact>("rename_artifact", { args: { id, name } });
 }
 
-export function deleteArtifact(id: string, deleteOriginal = false) {
-  return invoke<void>("delete_artifact", { args: { id, deleteOriginal } });
+export function deleteArtifact(id: string, deleteAudio = false) {
+  return invoke<void>("delete_artifact", { args: { id, deleteAudio } });
 }
 
 export function retryArtifact(id: string) {
   return invoke<Artifact>("retry_artifact", { args: { id } });
+}
+
+export function exportArtifactAudio(id: string, destPath: string) {
+  return invoke<void>("export_artifact_audio", { args: { id, destPath } });
 }
 
 export function getArtifactAudioPath(id: string) {

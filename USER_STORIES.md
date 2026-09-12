@@ -74,6 +74,7 @@ Duke                          ← Organization
 | Upload one or more audio files → one-shot `small.en` on device; queue extras | |
 | Import one or more `.vtt` / `.srt` / `.txt` | Mobile |
 | View artifacts in the hierarchy; remove one or many with confirm | Move an artifact between groups (US-205, not started) |
+| Export a meeting’s audio to a folder I choose (library copy stays) | |
 | Static waveform + click-to-seek; play / Follow / speed / clock under the waveform; search filters transcript lines | |
 | ChatGPT (`gpt-4o`) with an explicit scope | |
 | User-provided OpenAI API token in the keychain | |
@@ -102,6 +103,7 @@ Epic 2  Files & transcripts
         ~~US-207  Search within a transcript~~              Complete
         ~~US-209  Record from the microphone~~              Complete
         ~~US-210  Record system audio + microphone~~        Complete
+        ~~US-211  Export a meeting audio file~~             Complete
         US-208  Leave a timed comment on audio             Not started
 
 Epic 3  Scoped chat
@@ -803,8 +805,8 @@ Epic 3  Scoped chat
 - Trash on the file row asks for confirmation.  
 - **Select multiple** puts a checkbox on each row (including pending / importing / failed). **Delete** then confirms “Are you sure you want to delete {N} file(s)?”  
 - Those controls are hidden when the Files accordion is collapsed.  
-- The confirm dialog can also delete the audio on disk: a checkbox “Also delete the original audio file” (imports) or “Also delete the audio file from this computer” (recordings). Off by default.  
-- If that box is left unchecked, BellaNote’s library copy is still removed for imported files; the original in Downloads (or wherever you picked it) stays. Recordings stay on disk in the library until the box is checked.  
+- Removing an **imported** file always deletes BellaNote’s library copy and the DB row. The user’s original file (Downloads or wherever it was picked) is **never** deleted.  
+- Removing a **recording** asks optionally: “Also delete BellaNote’s copy of the audio” (off by default). Checking it removes the library WAV; leaving it unchecked keeps that file on disk under Application Support / AppData.  
 - Removed artifacts are out of every chat scope on the next ask.  
 - Removing a pending or importing file deletes the row immediately. A worker that had already started may finish in the background and then have nothing to update.
 
@@ -938,6 +940,40 @@ Epic 3  Scoped chat
 - **When** I choose **Record Meeting → System audio**, speak, then Stop  
 - **Then** the artifact contains meeting playback mixed with my voice  
 - **And** the transcript covers both
+
+---
+
+## ~~US-211 — Export a meeting audio file~~
+
+**Status:** Complete
+
+**As a** student,  
+**I want** to export the audio BellaNote saved for a meeting,  
+**so that** I can keep a copy outside the app without removing it from my library.
+
+**Acceptance**
+
+- Files that have audio show an **Export** control on the Files row and an **Export** button on the playback toolbar.  
+- Choosing Export opens a save dialog; the default name uses the original filename when present, otherwise the file title and the library extension.  
+- Confirming copies BellaNote’s library `source.*` to that path. The library file is not moved or deleted.  
+- Canceling the dialog does nothing.  
+- Transcript-only files do not offer Export.  
+- While a recording is still in progress, Export is hidden.
+
+### Scenarios
+
+**Export a recording**
+
+- **Given** a microphone or system recording is Ready (or Failed with audio on disk)  
+- **When** I choose Export and pick a destination  
+- **Then** a copy of that audio is at the destination  
+- **And** the file still plays in BellaNote
+
+**Cancel**
+
+- **Given** I open the Export save dialog  
+- **When** I cancel  
+- **Then** nothing is written outside the library
 
 ---
 
@@ -1364,7 +1400,7 @@ Epic 3  Scoped chat
 
 # Suggested next work
 
-Shipped: US-101–107, US-201–204, US-206, US-207, US-209, US-210, US-301, US-302, US-401, US-402.
+Shipped: US-101–107, US-201–204, US-206, US-207, US-209–211, US-301, US-302, US-401, US-402.
 
 Still open from this slice:
 

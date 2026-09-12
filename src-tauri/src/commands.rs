@@ -35,8 +35,9 @@ pub struct IdArgs {
 #[serde(rename_all = "camelCase")]
 pub struct DeleteArtifactArgs {
     pub id: String,
+    /// When true, also remove BellaNote’s library audio. Never deletes the user’s original import path.
     #[serde(default)]
-    pub delete_original: bool,
+    pub delete_audio: bool,
 }
 
 #[derive(Deserialize)]
@@ -182,13 +183,10 @@ pub async fn delete_artifact(
     recording::abort_if_artifact(&app, &state, &args.id).await;
     state.db.delete_artifact(&args.id)?;
     let is_recording = artifact.source_type == "voice" || artifact.source_type == "system";
-    if args.delete_original || !is_recording {
+    // Imports always drop BellaNote’s library copy. Recordings only when asked.
+    // Never delete the user’s original import path (Downloads, etc.).
+    if args.delete_audio || !is_recording {
         artifacts::delete_artifact_files(&app, &args.id);
-    }
-    if args.delete_original {
-        if let Ok(library) = crate::paths::library_dir(&app) {
-            artifacts::delete_original_source(&library, &artifact.original_path);
-        }
     }
     audio_peaks::invalidate_artifact(&args.id);
     Ok(())
@@ -221,6 +219,18 @@ pub async fn get_artifact_audio_peaks(app: AppHandle, args: IdArgs) -> AppResult
 #[tauri::command]
 pub fn retry_artifact(app: AppHandle, state: State<'_, Arc<AppState>>, args: IdArgs) -> AppResult<Artifact> {
     artifacts::retry_artifact(&app, &state, &args.id)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportArtifactAudioArgs {
+    pub id: String,
+    pub dest_path: String,
+}
+
+#[tauri::command]
+pub fn export_artifact_audio(app: AppHandle, args: ExportArtifactAudioArgs) -> AppResult<()> {
+    artifacts::export_artifact_audio(&app, &args.id, &args.dest_path)
 }
 
 #[derive(Deserialize)]
