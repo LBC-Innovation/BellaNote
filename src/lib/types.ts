@@ -31,7 +31,7 @@ export type Artifact = {
   id: string;
   meetingGroupId: string;
   title: string;
-  sourceType: "audio_upload" | "transcript_import" | "voice" | "system" | string;
+  sourceType: "audio_upload" | "video_upload" | "transcript_import" | "voice" | "system" | string;
   status: "queued" | "transcribing" | "ready" | "failed" | "recording" | string;
   hasAudio: boolean;
   originalFilename: string;

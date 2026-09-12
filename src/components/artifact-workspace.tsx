@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { save as saveFileDialog } from "@tauri-apps/plugin-dialog";
-import { Check, ChevronDown, ChevronLeft, Download, FileAudio, FileText, FileUp, Link2, Link2Off, ListChecks, Loader2, MessageSquarePlus, Mic, MonitorSpeaker, Pause, Pencil, Play, Plus, RotateCcw, Search, Square, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, Download, FileAudio, FileText, FileUp, FileVideo, Link2, Link2Off, ListChecks, Loader2, MessageSquarePlus, Mic, MonitorSpeaker, Pause, Pencil, Play, Plus, RotateCcw, Search, Square, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { ImportDropDialog } from "@/components/import-drop-dialog";
+import { ImportDropDialog, type ImportKind } from "@/components/import-drop-dialog";
 import { LiveMeter } from "@/components/live-meter";
 import { StaticWaveform } from "@/components/static-waveform";
 import { revokePlaybackUrl, urlForStereoPlayback } from "@/lib/stereoPlayback";
+import { openArtifactVideoWindow } from "@/lib/openVideoWindow";
 import { forgetWaveformPeaks, loadWaveformPeaks, peekWaveformPeaks } from "@/lib/waveformPeaks";
 import { WorkspaceCard } from "@/components/workspace-card";
 import { Badge } from "@/components/ui/badge";
@@ -72,12 +73,34 @@ async function exportArtifactAudioFile(artifact: Artifact) {
   toast.success("Audio exported");
 }
 
+async function exportArtifactTranscriptFile(artifact: Artifact) {
+  if (!hasTranscriptContent(artifact)) {
+    toast.error("This file has no transcript to export.");
+    return;
+  }
+  const dest = await saveFileDialog({
+    defaultPath: suggestedExportFileName(artifact, "txt"),
+    filters: [{ name: "Text", extensions: ["txt"] }],
+  });
+  if (!dest) return;
+  await api.exportArtifactTranscript(artifact.id, dest);
+  toast.success("Transcript exported");
+}
+
 function ArtifactKindChips({ artifact }: { artifact: Artifact }) {
-  const audio = artifact.hasAudio;
+  const isVideo = artifact.sourceType === "video_upload";
+  const audio = artifact.hasAudio && !isVideo;
+  const video = artifact.hasAudio && isVideo;
   const transcript = hasTranscriptContent(artifact);
-  if (!audio && !transcript) return null;
+  if (!audio && !video && !transcript) return null;
   return (
     <>
+      {video ? (
+        <Badge variant="secondary" className="capitalize">
+          <FileVideo />
+          Video
+        </Badge>
+      ) : null}
       {audio ? (
         <Badge variant="secondary" className="capitalize">
           <FileAudio />
@@ -119,7 +142,7 @@ function ImportMeetingControl({
   onPick,
   disabled,
 }: {
-  onPick: (kind: "audio" | "transcript") => void;
+  onPick: (kind: ImportKind) => void;
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -174,6 +197,18 @@ function ImportMeetingControl({
           >
             <FileAudio className="size-4 shrink-0" />
             Audio files
+          </button>
+          <button
+            type="button"
+            role="option"
+            className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-white/8"
+            onClick={() => {
+              setOpen(false);
+              onPick("video");
+            }}
+          >
+            <FileVideo className="size-4 shrink-0" />
+            Video files
           </button>
           <button
             type="button"
@@ -334,7 +369,7 @@ export function ArtifactWorkspace({ groupId, groupName }: { groupId: string; gro
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filesOpen, setFilesOpen] = useState(true);
   const [detailOpen, setDetailOpen] = useState(true);
-  const [importKind, setImportKind] = useState<"audio" | "transcript" | null>(null);
+  const [importKind, setImportKind] = useState<ImportKind | null>(null);
   const [comments, setComments] = useState<ArtifactComment[]>([]);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [jumpToMs, setJumpToMs] = useState<number | null>(null);
@@ -1084,10 +1119,16 @@ function PlaybackToolbar({
   durationMs,
   canExport,
   exporting,
+  canExportTranscript,
+  exportingTranscript,
+  canWatch,
+  watching,
   onTogglePlay,
   onToggleFollow,
   onPlaybackRateChange,
   onExport,
+  onExportTranscript,
+  onWatch,
 }: {
   disabled: boolean;
   playing: boolean;
@@ -1097,10 +1138,16 @@ function PlaybackToolbar({
   durationMs: number;
   canExport: boolean;
   exporting: boolean;
+  canExportTranscript: boolean;
+  exportingTranscript: boolean;
+  canWatch: boolean;
+  watching: boolean;
   onTogglePlay: () => void;
   onToggleFollow: () => void;
   onPlaybackRateChange: (rate: PlaybackRate) => void;
   onExport: () => void;
+  onExportTranscript: () => void;
+  onWatch: () => void;
 }) {
   return (
     <div className="mt-2 flex items-center gap-1.5">
@@ -1160,6 +1207,30 @@ function PlaybackToolbar({
         >
           {exporting ? <Loader2 className="animate-spin" /> : <Download />}
           Export
+        </Button>
+      ) : null}
+      {canExportTranscript ? (
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={exportingTranscript}
+          aria-label="Export transcript"
+          onClick={onExportTranscript}
+        >
+          {exportingTranscript ? <Loader2 className="animate-spin" /> : <FileText />}
+          Transcript
+        </Button>
+      ) : null}
+      {canWatch ? (
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={watching}
+          aria-label="Watch video"
+          onClick={onWatch}
+        >
+          {watching ? <Loader2 className="animate-spin" /> : <FileVideo />}
+          Watch
         </Button>
       ) : null}
       <p className="ml-auto shrink-0 whitespace-nowrap font-mono text-[11px] tabular-nums">
@@ -1359,6 +1430,8 @@ function ArtifactDetail({
   const [audioDurationMs, setAudioDurationMs] = useState(artifact.durationMs);
   const [transcriptQuery, setTranscriptQuery] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [exportingTranscript, setExportingTranscript] = useState(false);
+  const [watching, setWatching] = useState(false);
 
   const activeIndex = useMemo(
     () => activeSegmentIndex(segments, currentTimeMs),
@@ -1563,6 +1636,10 @@ function ArtifactDetail({
             durationMs={audioDurationMs || artifact.durationMs}
             canExport={artifact.hasAudio && !isRecordingArtifact(artifact)}
             exporting={exporting}
+            canExportTranscript={hasTranscriptContent(artifact)}
+            exportingTranscript={exportingTranscript}
+            canWatch={artifact.sourceType === "video_upload"}
+            watching={watching}
             onTogglePlay={() => {
               const audio = audioRef.current;
               if (!audio) return;
@@ -1578,10 +1655,44 @@ function ArtifactDetail({
                 .catch((err) => toast.error(errorMessage(err)))
                 .finally(() => setExporting(false));
             }}
+            onExportTranscript={() => {
+              if (exportingTranscript) return;
+              setExportingTranscript(true);
+              void exportArtifactTranscriptFile(artifact)
+                .catch((err) => toast.error(errorMessage(err)))
+                .finally(() => setExportingTranscript(false));
+            }}
+            onWatch={() => {
+              if (watching) return;
+              setWatching(true);
+              void openArtifactVideoWindow(artifact.id, artifact.title)
+                .catch((err) => toast.error(errorMessage(err)))
+                .finally(() => setWatching(false));
+            }}
           />
         </div>
       ) : (
-        <p className="shrink-0 text-sm text-muted-foreground">No waveform — this meeting is transcript only.</p>
+        <div className="flex shrink-0 items-center gap-2">
+          <p className="text-sm text-muted-foreground">No waveform — this meeting is transcript only.</p>
+          {hasTranscriptContent(artifact) ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={exportingTranscript}
+              aria-label="Export transcript"
+              onClick={() => {
+                if (exportingTranscript) return;
+                setExportingTranscript(true);
+                void exportArtifactTranscriptFile(artifact)
+                  .catch((err) => toast.error(errorMessage(err)))
+                  .finally(() => setExportingTranscript(false));
+              }}
+            >
+              {exportingTranscript ? <Loader2 className="animate-spin" /> : <FileText />}
+              Transcript
+            </Button>
+          ) : null}
+        </div>
       )}
 
       {canSearchTranscript ? (
