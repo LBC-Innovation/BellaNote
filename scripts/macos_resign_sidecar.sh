@@ -31,13 +31,15 @@ if [[ -z "$identity" ]]; then
   echo "No APPLE_SIGNING_IDENTITY; ad-hoc signing the sidecar with entitlements."
 fi
 
-sign=(codesign --force --options runtime --entitlements)
+# --timestamp must not sit between --entitlements and its path, or codesign
+# treats "--timestamp" as the entitlements file ("cannot read entitlement data").
+sign=(codesign --force --options runtime)
 if [[ "$identity" != "-" ]]; then
   sign+=(--timestamp)
 fi
 
-"${sign[@]}" "$sidecar_ent" --sign "$identity" "$worker"
-"${sign[@]}" "$app_ent" --sign "$identity" "$app"
+"${sign[@]}" --entitlements "$sidecar_ent" --sign "$identity" "$worker"
+"${sign[@]}" --entitlements "$app_ent" --sign "$identity" "$app"
 
 worker_ent="$(codesign -d --entitlements - "$worker" 2>&1)"
 main_ent="$(codesign -d --entitlements - "$main" 2>&1)"
